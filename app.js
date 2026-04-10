@@ -15,7 +15,8 @@ const Icon = ({ name, size = 20, className = "" }) => {
         expense: (<><circle cx="12" cy="12" r="10"/><polyline points="8 12 12 16 16 12"/><line x1="12" y1="8" x2="12" y2="16"/></>),
         x: (<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>),
         trendingUp: (<><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></>),
-        alert: (<><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>)
+        alert: (<><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>),
+        download: (<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>)
     };
     return (
         <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -31,11 +32,21 @@ const App = () => {
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [showAddModal, setShowAddModal] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deferredPrompt, setDeferredPrompt] = useState(null);
     const [formData, setFormData] = useState({ amount: '', type: 'income', category: '', note: '', date: new Date().toISOString().split('T')[0] });
     const [newCatName, setNewCatName] = useState('');
     const [newCatType, setNewCatType] = useState('expense');
 
     useEffect(() => {
+        // Logika menangkap event instalasi browser
+        const handleBeforeInstallPrompt = (e) => {
+            e.preventDefault();
+            setDeferredPrompt(e);
+            console.log('Event beforeinstallprompt tertangkap.');
+        };
+
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener('resize', handleResize);
         
@@ -52,7 +63,10 @@ const App = () => {
             { id: '5', name: 'Operasional', type: 'expense' }
         ]);
         
-        return () => window.removeEventListener('resize', handleResize);
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        };
     }, []);
 
     useEffect(() => {
@@ -68,12 +82,29 @@ const App = () => {
 
     const formatIDR = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
+    const handleInstallApp = async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+            console.log('Pengguna menerima instalasi.');
+            setDeferredPrompt(null);
+        } else {
+            console.log('Pengguna menolak instalasi.');
+        }
+    };
+
     const handleAddTransaction = (e) => {
         e.preventDefault();
         if (!formData.amount || !formData.note) return;
         setTransactions([{ ...formData, id: Date.now().toString(), amount: Number(formData.amount) }, ...transactions]);
         setShowAddModal(false);
         setFormData({ ...formData, amount: '', note: '', date: new Date().toISOString().split('T')[0] });
+    };
+
+    const deleteAllData = () => {
+        setTransactions([]);
+        setShowDeleteConfirm(false);
     };
 
     // View: Analisis Arus Kas
@@ -161,6 +192,17 @@ const App = () => {
                         <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-3 px-5 py-4 rounded-2xl font-bold transition-all ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Icon name={tab.icon} /> {tab.label}</button>
                     ))}
                 </nav>
+
+                {/* Tombol Instalasi Desktop Sidebar */}
+                {deferredPrompt && (
+                    <button 
+                        onClick={handleInstallApp}
+                        className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-emerald-50 text-emerald-700 font-black text-sm border-2 border-emerald-100 hover:bg-emerald-100 transition-all mb-2"
+                    >
+                        <Icon name="download" size={18} /> INSTAL APLIKASI
+                    </button>
+                )}
+
                 <button onClick={() => window.print()} className="flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-slate-900 text-white font-black text-sm"><Icon name="printer" /> CETAK PDF</button>
             </aside>
 
@@ -177,7 +219,18 @@ const App = () => {
             <main className="flex-1 p-6 md:p-12 overflow-y-auto max-h-screen">
                 <header className="flex justify-between items-center mb-10 no-print">
                     <h2 className="text-2xl font-black capitalize">{activeTab}</h2>
-                    <button onClick={() => setShowAddModal(true)} className="hidden md:flex bg-blue-600 text-white px-6 py-3 rounded-2xl font-black items-center gap-2 shadow-lg active:scale-95 transition-all"><Icon name="plus" /> TRANSAKSI BARU</button>
+                    <div className="flex gap-3">
+                        {/* Tombol Instalasi Desktop Header (Opsional) */}
+                        {!isMobile && deferredPrompt && (
+                            <button 
+                                onClick={handleInstallApp}
+                                className="bg-emerald-600 text-white px-6 py-3 rounded-2xl font-black flex items-center gap-2 shadow-lg active:scale-95 transition-all"
+                            >
+                                <Icon name="download" /> INSTAL APP
+                            </button>
+                        )}
+                        <button onClick={() => setShowAddModal(true)} className="hidden md:flex bg-blue-600 text-white px-6 py-3 rounded-2xl font-black items-center gap-2 shadow-lg active:scale-95 transition-all"><Icon name="plus" /> TRANSAKSI BARU</button>
+                    </div>
                 </header>
 
                 {activeTab === 'dashboard' && <Dashboard />}
@@ -240,6 +293,16 @@ const App = () => {
                                 ))}
                             </div>
                         </div>
+
+                        {/* Fitur Instalasi di Pengaturan */}
+                        {deferredPrompt && (
+                            <div className="bg-emerald-50 p-8 md:p-10 rounded-[40px] border border-emerald-100">
+                                <h4 className="text-lg font-black text-emerald-900 mb-2">Instal Aplikasi</h4>
+                                <p className="text-xs text-emerald-600 mb-6 font-medium leading-relaxed">Gunakan aplikasi secara penuh tanpa melalui browser dengan menginstalnya ke layar utama Anda.</p>
+                                <button onClick={handleInstallApp} className="w-full md:w-auto px-8 py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm active:scale-95 transition-all shadow-lg shadow-emerald-200 uppercase tracking-widest">Instal Sekarang</button>
+                            </div>
+                        )}
+
                         <div className="bg-rose-50 p-8 md:p-10 rounded-[40px] border border-rose-100">
                             <h4 className="text-lg font-black text-rose-900 mb-2">Zona Bahaya</h4>
                             <p className="text-xs text-rose-600 mb-6 font-medium leading-relaxed">Gunakan fitur ini untuk membersihkan seluruh riwayat transaksi. Seluruh data akan dihapus secara permanen dari perangkat ini.</p>
