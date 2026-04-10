@@ -22,22 +22,21 @@
     <div id="root"></div>
 
     <script>
+        // Registrasi Service Worker dengan penanganan error yang lebih baik
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                const isLocalOrSecure = window.location.protocol === 'http:' || 
-                                      window.location.protocol === 'https:' || 
-                                      window.location.hostname === 'localhost';
-
-                if (isLocalOrSecure) {
-                    navigator.serviceWorker.register('sw.js')
-                        .then(reg => console.log('SW terdaftar:', reg.scope))
-                        .catch(err => console.warn('Pendaftaran SW dilewati (Sandbox):', err.message));
-                }
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => {
+                        console.log('Service Worker aktif pada scope:', reg.scope);
+                    })
+                    .catch(err => {
+                        console.warn('PWA: Gunakan HTTPS atau localhost agar fitur instalasi muncul.', err);
+                    });
             });
         }
     </script>
 
-    <!-- File Logika Aplikasi (React/JSX) -->
+    <!-- Memuat Logika Aplikasi -->
     <script type="text/babel" data-presets="react" src="app.js"></script>
 </body>
 </html>
