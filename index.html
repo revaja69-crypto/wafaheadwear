@@ -21,9 +21,7 @@
 <body>
     <div id="root"></div>
 
-    <!-- Script Registrasi Service Worker -->
     <script>
-        // Memastikan Service Worker hanya didaftarkan pada protokol yang didukung (http/https)
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 const isLocalOrSecure = window.location.protocol === 'http:' || 
@@ -32,13 +30,8 @@
 
                 if (isLocalOrSecure) {
                     navigator.serviceWorker.register('sw.js')
-                        .then(reg => console.log('SW terdaftar di scope:', reg.scope))
-                        .catch(err => {
-                            // Mencegah error fatal jika file sw.js tidak ditemukan atau protokol tidak valid
-                            console.warn('Pendaftaran SW diabaikan:', err.message);
-                        });
-                } else {
-                    console.warn('Pendaftaran SW dilewati: Protokol tidak didukung di lingkungan ini.');
+                        .then(reg => console.log('SW terdaftar:', reg.scope))
+                        .catch(err => console.warn('Pendaftaran SW dilewati (Sandbox):', err.message));
                 }
             });
         }
