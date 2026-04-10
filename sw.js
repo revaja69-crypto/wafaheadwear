@@ -11,7 +11,6 @@ const ASSETS = [
     'https://unpkg.com/@babel/standalone/babel.min.js'
 ];
 
-// Instalasi dan Caching
 self.addEventListener('install', (event) => {
     self.skipWaiting();
     event.waitUntil(
@@ -21,13 +20,10 @@ self.addEventListener('install', (event) => {
     );
 });
 
-// Strategi Fetch: Cache First, Fallback to Network
 self.addEventListener('fetch', (event) => {
     event.respondWith(
         caches.match(event.request).then((response) => {
-            return response || fetch(event.request).catch(() => {
-                // Opsional: berikan halaman offline jika perlu
-            });
+            return response || fetch(event.request);
         })
     );
 });
