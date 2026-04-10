@@ -31,7 +31,6 @@ const App = () => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deferredPrompt, setDeferredPrompt] = useState(null);
     
-    // Inisialisasi state untuk kategori baru
     const [newCatName, setNewCatName] = useState('');
     const [newCatType, setNewCatType] = useState('expense');
     
@@ -56,13 +55,31 @@ const App = () => {
         const savedCats = localStorage.getItem('umkm_categories');
         
         if (savedTrans) setTransactions(JSON.parse(savedTrans));
-        if (savedCats) setCategories(JSON.parse(savedCats));
-        else setCategories([
-            { id: '1', name: 'Penjualan', type: 'income' },
-            { id: '2', name: 'Belanja Stok', type: 'expense' },
-            { id: '3', name: 'Gaji Tenaga', type: 'expense' },
-            { id: '4', name: 'Operasional', type: 'expense' }
-        ]);
+        
+        if (savedCats) {
+            setCategories(JSON.parse(savedCats));
+        } else {
+            // Menambahkan Kategori Default yang lebih lengkap
+            const defaultCats = [
+                // Pemasukan
+                { id: '1', name: 'Penjualan Produk', type: 'income' },
+                { id: '2', name: 'Penjualan Jasa', type: 'income' },
+                { id: '3', name: 'Modal Awal', type: 'income' },
+                { id: '4', name: 'Piutang Masuk', type: 'income' },
+                { id: '5', name: 'Bonus/Hibah', type: 'income' },
+                // Pengeluaran
+                { id: '6', name: 'Bahan Baku/Stok', type: 'expense' },
+                { id: '7', name: 'Gaji Karyawan', type: 'expense' },
+                { id: '8', name: 'Listrik & Air', type: 'expense' },
+                { id: '9', name: 'Sewa Tempat', type: 'expense' },
+                { id: '10', name: 'Pemasaran/Iklan', type: 'expense' },
+                { id: '11', name: 'Internet/Pulsa', type: 'expense' },
+                { id: '12', name: 'Transportasi', type: 'expense' },
+                { id: '13', name: 'Pajak/Biaya Bank', type: 'expense' },
+                { id: '14', name: 'Lain-lain', type: 'expense' }
+            ];
+            setCategories(defaultCats);
+        }
 
         return () => window.removeEventListener('resize', handleResize);
     }, []);
@@ -89,7 +106,7 @@ const App = () => {
 
     const handleAddTransaction = (e) => {
         e.preventDefault();
-        if (!formData.amount || !formData.note) return;
+        if (!formData.amount || !formData.note || !formData.category) return;
         setTransactions([{ ...formData, id: Date.now().toString(), amount: Number(formData.amount) }, ...transactions]);
         setShowAddModal(false);
         setFormData({ ...formData, amount: '', note: '', date: new Date().toISOString().split('T')[0] });
@@ -166,7 +183,7 @@ const App = () => {
                             <Icon name="download" size={18}/> INSTAL APLIKASI
                         </button>
                     )}
-                    <button onClick={() => setShowAddModal(true)} className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-black flex items-center gap-3 shadow-xl hover:bg-blue-700 transition-all">
+                    <button onClick={() => { setFormData({...formData, type: 'income'}); setShowAddModal(true); }} className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-black flex items-center gap-3 shadow-xl hover:bg-blue-700 transition-all">
                         <Icon name="plus" /> CATAT BARU
                     </button>
                 </div>
@@ -183,7 +200,7 @@ const App = () => {
             <div className="md:hidden bottom-nav no-print">
                 <button onClick={() => setActiveTab('dashboard')} className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}><Icon name="home" size={24} /> <span className="text-[8px] font-black mt-1">HOME</span></button>
                 <button onClick={() => setActiveTab('history')} className={`nav-item ${activeTab === 'history' ? 'active' : ''}`}><Icon name="history" size={24} /> <span className="text-[8px] font-black mt-1">ARSIP</span></button>
-                <button onClick={() => setShowAddModal(true)} className="fab-button"><Icon name="plus" size={32} /></button>
+                <button onClick={() => { setFormData({...formData, type: 'income'}); setShowAddModal(true); }} className="fab-button"><Icon name="plus" size={32} /></button>
                 <button onClick={() => setActiveTab('reports')} className={`nav-item ${activeTab === 'reports' ? 'active' : ''}`}><Icon name="reports" size={24} /> <span className="text-[8px] font-black mt-1">DATA</span></button>
                 <button onClick={() => setActiveTab('settings')} className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}><Icon name="settings" size={24} /> <span className="text-[8px] font-black mt-1">ATUR</span></button>
             </div>
@@ -233,10 +250,16 @@ const App = () => {
                     <div className="max-w-2xl mx-auto space-y-8 fade-in">
                         <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
                             <h3 className="text-xl font-black mb-8">Atur Kategori</h3>
-                            <form onSubmit={(e) => { e.preventDefault(); if(!newCatName) return; setCategories([...categories, { id: Date.now().toString(), name: newCatName, type: newCatType }]); setNewCatName(''); }} className="flex gap-2 mb-10">
-                                <input type="text" placeholder="Nama kategori..." required value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="flex-1 p-5 bg-slate-50 rounded-2xl outline-none font-bold text-sm focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all" />
-                                <button type="submit" className="px-6 bg-blue-600 text-white rounded-2xl shadow-lg transition-transform active:scale-95"><Icon name="plus" /></button>
-                            </form>
+                            <div className="flex gap-2 mb-10">
+                                <input type="text" placeholder="Nama kategori baru..." required value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="flex-1 p-5 bg-slate-50 rounded-2xl outline-none font-bold text-sm focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all" />
+                                <div className="flex gap-2">
+                                    <select value={newCatType} onChange={(e) => setNewCatType(e.target.value)} className="p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm">
+                                        <option value="expense">Keluar</option>
+                                        <option value="income">Masuk</option>
+                                    </select>
+                                    <button onClick={() => { if(!newCatName) return; setCategories([...categories, { id: Date.now().toString(), name: newCatName, type: newCatType }]); setNewCatName(''); }} className="px-6 bg-blue-600 text-white rounded-2xl shadow-lg transition-transform active:scale-95"><Icon name="plus" /></button>
+                                </div>
+                            </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {categories.map(c => (
                                     <div key={c.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl group">
@@ -261,12 +284,12 @@ const App = () => {
                         <div className="flex justify-between items-center mb-10"><h2 className="text-2xl font-black">Catat Arus Kas</h2><button onClick={() => setShowAddModal(false)} className="p-4 bg-slate-100 rounded-2xl hover:bg-slate-200 transition-all"><Icon name="x" /></button></div>
                         <form onSubmit={handleAddTransaction} className="space-y-8">
                             <div className="grid grid-cols-2 gap-4">
-                                <button type="button" onClick={() => setFormData({...formData, type: 'income'})} className={`py-5 rounded-3xl font-black text-xs border-4 transition-all ${formData.type === 'income' ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'border-slate-50 text-slate-300'}`}>PEMASUKAN</button>
-                                <button type="button" onClick={() => setFormData({...formData, type: 'expense'})} className={`py-5 rounded-3xl font-black text-xs border-4 transition-all ${formData.type === 'expense' ? 'bg-rose-50 border-rose-500 text-rose-700' : 'border-slate-50 text-slate-300'}`}>PENGELUARAN</button>
+                                <button type="button" onClick={() => setFormData({...formData, type: 'income', category: ''})} className={`py-5 rounded-3xl font-black text-xs border-4 transition-all ${formData.type === 'income' ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'border-slate-50 text-slate-300'}`}>PEMASUKAN</button>
+                                <button type="button" onClick={() => setFormData({...formData, type: 'expense', category: ''})} className={`py-5 rounded-3xl font-black text-xs border-4 transition-all ${formData.type === 'expense' ? 'bg-rose-50 border-rose-500 text-rose-700' : 'border-slate-50 text-slate-300'}`}>PENGELUARAN</button>
                             </div>
                             <input type="number" required placeholder="0" className="w-full text-5xl font-black p-10 bg-slate-50 rounded-[40px] outline-none border-4 border-transparent focus:border-blue-500 text-center transition-all shadow-inner" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <select className="w-full p-6 bg-slate-50 rounded-2xl outline-none font-black text-sm appearance-none cursor-pointer" value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})}>
+                                <select required className="w-full p-6 bg-slate-50 rounded-2xl outline-none font-black text-sm appearance-none cursor-pointer" value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})}>
                                     <option value="">Pilih Kategori</option>
                                     {categories.filter(c => c.type === formData.type).map(cat => (<option key={cat.id} value={cat.name}>{cat.name}</option>))}
                                 </select>
