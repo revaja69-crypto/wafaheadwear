@@ -181,6 +181,13 @@
                         <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
                         <polyline points="17 6 23 6 23 12"/>
                     </>
+                ),
+                alertCircle: (
+                    <>
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </>
                 )
             };
             return (
@@ -196,6 +203,7 @@
             const [activeTab, setActiveTab] = useState('dashboard');
             const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
             const [showAddModal, setShowAddModal] = useState(false);
+            const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
             const [formData, setFormData] = useState({ amount: '', type: 'income', category: '', note: '', date: new Date().toISOString().split('T')[0] });
             const [newCatName, setNewCatName] = useState('');
             const [newCatType, setNewCatType] = useState('expense');
@@ -256,6 +264,11 @@
             };
 
             const deleteTransaction = (id) => setTransactions(transactions.filter(t => t.id !== id));
+
+            const handleDeleteAllData = () => {
+                setTransactions([]);
+                setShowDeleteAllConfirm(false);
+            };
 
             const handleAddCategory = (e) => {
                 e.preventDefault();
@@ -365,10 +378,22 @@
                                         <div className="bg-white p-8 rounded-[40px] border border-slate-100"><h3 className="font-black text-xl mb-8">Riwayat Lengkap</h3><div className="space-y-1">{transactions.map(t => <TransactionItem key={t.id} item={t} />)}</div></div>
                                     )}
                                     {activeTab === 'settings' && (
-                                        <div className="bg-white p-10 rounded-[40px] border border-slate-100 max-w-2xl mx-auto">
-                                            <h3 className="text-xl font-black mb-6">Manajemen Kategori</h3>
-                                            <form onSubmit={handleAddCategory} className="flex gap-2 mb-8"><input type="text" placeholder="Kategori..." required value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="flex-1 p-4 bg-slate-50 rounded-xl outline-none font-bold" /><select value={newCatType} onChange={(e) => setNewCatType(e.target.value)} className="p-4 bg-slate-50 rounded-xl outline-none font-bold"><option value="expense">Keluar</option><option value="income">Masuk</option></select><button type="submit" className="p-4 bg-blue-600 text-white rounded-xl"><Icon name="plus" /></button></form>
-                                            <div className="space-y-2">{categories.map(c => (<div key={c.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl"><span className="font-black text-xs uppercase text-slate-600">{c.name} ({c.type})</span><button onClick={() => deleteCategory(c.id)} className="text-slate-300 hover:text-rose-500"><Icon name="trash" size={16}/></button></div>))}</div>
+                                        <div className="space-y-8 max-w-2xl mx-auto">
+                                            <div className="bg-white p-10 rounded-[40px] border border-slate-100">
+                                                <h3 className="text-xl font-black mb-6">Manajemen Kategori</h3>
+                                                <form onSubmit={handleAddCategory} className="flex gap-2 mb-8"><input type="text" placeholder="Kategori..." required value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="flex-1 p-4 bg-slate-50 rounded-xl outline-none font-bold" /><select value={newCatType} onChange={(e) => setNewCatType(e.target.value)} className="p-4 bg-slate-50 rounded-xl outline-none font-bold"><option value="expense">Keluar</option><option value="income">Masuk</option></select><button type="submit" className="p-4 bg-blue-600 text-white rounded-xl"><Icon name="plus" /></button></form>
+                                                <div className="space-y-2">{categories.map(c => (<div key={c.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl"><span className="font-black text-xs uppercase text-slate-600">{c.name} ({c.type})</span><button onClick={() => deleteCategory(c.id)} className="text-slate-300 hover:text-rose-500"><Icon name="trash" size={16}/></button></div>))}</div>
+                                            </div>
+                                            <div className="bg-rose-50 p-10 rounded-[40px] border border-rose-100">
+                                                <h3 className="text-xl font-black text-rose-900 mb-4">Zona Bahaya</h3>
+                                                <p className="text-sm text-rose-600 mb-6 font-medium">Tindakan ini akan menghapus seluruh catatan transaksi yang tersimpan di perangkat ini secara permanen.</p>
+                                                <button 
+                                                    onClick={() => setShowDeleteAllConfirm(true)}
+                                                    className="px-8 py-4 bg-rose-600 text-white rounded-2xl font-black hover:bg-rose-700 transition-all shadow-lg shadow-rose-200"
+                                                >
+                                                    HAPUS SELURUH DATA
+                                                </button>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -391,8 +416,20 @@
                                     {activeTab === 'reports' && categories.map(c => { const val = transactions.filter(t => t.category === c.name).reduce((a, b) => a + Number(b.amount), 0); return (<div key={c.id} className="flex justify-between p-4 bg-slate-50 rounded-2xl text-xs font-bold mb-2"><span>{c.name}</span><span className={c.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}>{formatIDR(val)}</span></div>); })}
                                     {activeTab === 'settings' && (
                                         <div className="space-y-6">
-                                            <form onSubmit={handleAddCategory} className="space-y-2"><input type="text" placeholder="Kategori" required value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold" /><div className="flex gap-2"><select value={newCatType} onChange={(e) => setNewCatType(e.target.value)} className="flex-1 p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm"><option value="expense">Keluar</option><option value="income">Masuk</option></select><button type="submit" className="px-6 bg-blue-600 text-white rounded-2xl"><Icon name="plus" /></button></div></form>
-                                            <div className="space-y-2">{categories.map(c => (<div key={c.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl"><span className="text-[10px] font-black text-slate-600 uppercase">{c.name}</span><button onClick={() => deleteCategory(c.id)} className="text-slate-300"><Icon name="trash" size={14}/></button></div>))}</div>
+                                            <div className="space-y-4">
+                                                <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest">Atur Kategori</h4>
+                                                <form onSubmit={handleAddCategory} className="space-y-2"><input type="text" placeholder="Kategori" required value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold" /><div className="flex gap-2"><select value={newCatType} onChange={(e) => setNewCatType(e.target.value)} className="flex-1 p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm"><option value="expense">Keluar</option><option value="income">Masuk</option></select><button type="submit" className="px-6 bg-blue-600 text-white rounded-2xl"><Icon name="plus" /></button></div></form>
+                                                <div className="space-y-2">{categories.map(c => (<div key={c.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl"><span className="text-[10px] font-black text-slate-600 uppercase">{c.name}</span><button onClick={() => deleteCategory(c.id)} className="text-slate-300"><Icon name="trash" size={14}/></button></div>))}</div>
+                                            </div>
+                                            <div className="pt-8 border-t border-slate-100">
+                                                <h4 className="text-sm font-black text-rose-600 uppercase tracking-widest mb-3">Zona Bahaya</h4>
+                                                <button 
+                                                    onClick={() => setShowDeleteAllConfirm(true)}
+                                                    className="w-full py-4 bg-rose-50 text-rose-600 border-2 border-rose-100 rounded-2xl font-black text-xs"
+                                                >
+                                                    HAPUS SEMUA DATA TRANSAKSI
+                                                </button>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -407,7 +444,7 @@
                         </div>
                     )}
 
-                    {/* MODAL */}
+                    {/* MODAL INPUT TRANSAKSI */}
                     {showAddModal && (
                         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-end md:items-center justify-center p-0 md:p-10 no-print">
                             <div className="bg-white w-full max-w-xl rounded-t-[40px] md:rounded-[40px] p-8 md:p-10 animate-in slide-in-from-bottom shadow-2xl overflow-y-auto max-h-[90vh]">
@@ -427,6 +464,33 @@
                                     <input type="text" required placeholder="Keterangan..." className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold" value={formData.note} onChange={(e) => setFormData({...formData, note: e.target.value})} />
                                     <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-[28px] font-black text-lg active:scale-95 transition-all uppercase tracking-widest">SIMPAN KAS</button>
                                 </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL KONFIRMASI HAPUS SEMUA */}
+                    {showDeleteAllConfirm && (
+                        <div className="fixed inset-0 bg-rose-900/90 backdrop-blur-md z-[100] flex items-center justify-center p-6 no-print">
+                            <div className="bg-white w-full max-w-sm rounded-[40px] p-10 shadow-2xl text-center animate-in zoom-in duration-300">
+                                <div className="mx-auto w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mb-6">
+                                    <Icon name="alertCircle" size={32} />
+                                </div>
+                                <h3 className="text-xl font-black text-slate-900 mb-2">Hapus Semua Data?</h3>
+                                <p className="text-sm text-slate-500 mb-8 font-medium">Tindakan ini tidak dapat dibatalkan. Seluruh riwayat transaksi Anda akan hilang selamanya.</p>
+                                <div className="space-y-3">
+                                    <button 
+                                        onClick={handleDeleteAllData}
+                                        className="w-full py-4 bg-rose-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-rose-200 active:scale-95 transition-all"
+                                    >
+                                        YA, HAPUS SEMUANYA
+                                    </button>
+                                    <button 
+                                        onClick={() => setShowDeleteAllConfirm(false)}
+                                        className="w-full py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-sm active:scale-95 transition-all"
+                                    >
+                                        BATALKAN
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
