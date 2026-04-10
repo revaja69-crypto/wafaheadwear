@@ -46,9 +46,11 @@ const App = () => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener('resize', handleResize);
 
+        // Menangkap event instalasi PWA
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             setDeferredPrompt(e);
+            console.log("PWA: Prompt instalasi siap.");
         });
 
         const savedTrans = localStorage.getItem('umkm_transactions');
@@ -59,15 +61,12 @@ const App = () => {
         if (savedCats) {
             setCategories(JSON.parse(savedCats));
         } else {
-            // Menambahkan Kategori Default yang lebih lengkap
             const defaultCats = [
-                // Pemasukan
                 { id: '1', name: 'Penjualan Produk', type: 'income' },
                 { id: '2', name: 'Penjualan Jasa', type: 'income' },
                 { id: '3', name: 'Modal Awal', type: 'income' },
                 { id: '4', name: 'Piutang Masuk', type: 'income' },
                 { id: '5', name: 'Bonus/Hibah', type: 'income' },
-                // Pengeluaran
                 { id: '6', name: 'Bahan Baku/Stok', type: 'expense' },
                 { id: '7', name: 'Gaji Karyawan', type: 'expense' },
                 { id: '8', name: 'Listrik & Air', type: 'expense' },
@@ -97,11 +96,16 @@ const App = () => {
 
     const formatIDR = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
-    const handleInstall = async () => {
-        if (!deferredPrompt) return;
+    const handleInstallClick = async () => {
+        if (!deferredPrompt) {
+            alert("Tombol instalasi belum aktif. Pastikan Anda menggunakan HTTPS dan tunggu beberapa saat.");
+            return;
+        }
         deferredPrompt.prompt();
         const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') setDeferredPrompt(null);
+        if (outcome === 'accepted') {
+            setDeferredPrompt(null);
+        }
     };
 
     const handleAddTransaction = (e) => {
@@ -178,11 +182,6 @@ const App = () => {
                     <h1 className="text-2xl font-black">CASHFLOW <span className="text-blue-600">PRO</span></h1>
                 </div>
                 <div className="flex gap-4">
-                    {deferredPrompt && (
-                        <button onClick={handleInstall} className="px-6 py-3 bg-emerald-50 text-emerald-700 rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-emerald-100 transition-all border-2 border-emerald-100">
-                            <Icon name="download" size={18}/> INSTAL APLIKASI
-                        </button>
-                    )}
                     <button onClick={() => { setFormData({...formData, type: 'income'}); setShowAddModal(true); }} className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-black flex items-center gap-3 shadow-xl hover:bg-blue-700 transition-all">
                         <Icon name="plus" /> CATAT BARU
                     </button>
@@ -248,6 +247,18 @@ const App = () => {
 
                 {activeTab === 'settings' && (
                     <div className="max-w-2xl mx-auto space-y-8 fade-in">
+                        {/* Tombol Instalasi Manual */}
+                        <div className="bg-blue-50 p-10 rounded-[40px] border border-blue-100">
+                            <h4 className="text-lg font-black text-blue-900 mb-2">Instal Aplikasi Desktop</h4>
+                            <p className="text-xs text-blue-600 mb-8 font-medium leading-relaxed">Gunakan aplikasi langsung dari desktop Anda tanpa perlu membuka browser secara manual.</p>
+                            <button 
+                                onClick={handleInstallClick} 
+                                className={`flex items-center gap-3 px-8 py-5 rounded-2xl font-black text-sm transition-all shadow-xl ${deferredPrompt ? 'bg-blue-600 text-white shadow-blue-200' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                            >
+                                <Icon name="download" /> {deferredPrompt ? "INSTAL SEKARANG" : "SISTEM SEDANG MENYIAPKAN..."}
+                            </button>
+                        </div>
+
                         <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
                             <h3 className="text-xl font-black mb-8">Atur Kategori</h3>
                             <div className="flex gap-2 mb-10">
@@ -269,6 +280,7 @@ const App = () => {
                                 ))}
                             </div>
                         </div>
+
                         <div className="bg-rose-50 p-10 rounded-[40px] border border-rose-100">
                             <h4 className="text-lg font-black text-rose-900 mb-2">Zona Berbahaya</h4>
                             <p className="text-xs text-rose-600 mb-8 font-medium leading-relaxed">Hapus seluruh data keuangan dari perangkat ini secara permanen.</p>
@@ -278,6 +290,7 @@ const App = () => {
                 )}
             </main>
 
+            {/* Modal Input Transaksi */}
             {showAddModal && (
                 <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[2000] flex items-end md:items-center justify-center p-0 md:p-10 no-print">
                     <div className="bg-white w-full max-w-xl rounded-t-[40px] md:rounded-[48px] p-8 md:p-12 animate-in slide-in-from-bottom duration-300 max-h-[95vh] overflow-y-auto shadow-2xl">
@@ -302,6 +315,7 @@ const App = () => {
                 </div>
             )}
 
+            {/* Modal Konfirmasi Hapus */}
             {showDeleteConfirm && (
                 <div className="fixed inset-0 bg-rose-900/90 backdrop-blur-md z-[3000] flex items-center justify-center p-6 no-print">
                     <div className="bg-white w-full max-w-sm rounded-[48px] p-12 text-center shadow-2xl animate-in zoom-in duration-300">
