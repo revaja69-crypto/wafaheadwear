@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cashflow UMKM Pro - Cloud Sync</title>
+    <meta name="theme-color" content="#2563eb">
+    <title>Cashflow UMKM Pro - Offline Ready</title>
+    
+    <!-- Manifest PWA (Embedded via Data URI) -->
+    <link rel="manifest" href='data:application/manifest+json,{"name":"Cashflow UMKM Pro","short_name":"Cashflow","description":"Aplikasi pencatatan keuangan UMKM","start_url":".","display":"standalone","background_color":"#f8fafc","theme_color":"#2563eb","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/2654/2654254.png","sizes":"512x512","type":"image/png"}]}'>
+    
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React & ReactDOM CDN -->
@@ -11,6 +16,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         
@@ -36,26 +42,62 @@
         }
 
         /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #f1f5f9;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 10px;
-        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     </style>
 </head>
 <body class="bg-slate-50">
     <div id="root"></div>
 
+    <!-- Script PWA: Registrasi Service Worker Dinamis -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            const swCode = `
+                const CACHE_NAME = 'cashflow-umkm-v1';
+                const ASSETS = [
+                    './',
+                    'index.html',
+                    'https://cdn.tailwindcss.com',
+                    'https://unpkg.com/react@18/umd/react.production.min.js',
+                    'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
+                    'https://unpkg.com/@babel/standalone/babel.min.js'
+                ];
+
+                self.addEventListener('install', (event) => {
+                    event.waitUntil(
+                        caches.open(CACHE_NAME).then((cache) => {
+                            return cache.addAll(ASSETS);
+                        })
+                    );
+                });
+
+                self.addEventListener('fetch', (event) => {
+                    event.respondWith(
+                        caches.match(event.request).then((response) => {
+                            return response || fetch(event.request);
+                        })
+                    );
+                });
+            `;
+
+            const blob = new Blob([swCode], { type: 'text/javascript' });
+            const swUrl = URL.createObjectURL(blob);
+            
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register(swUrl).then((reg) => {
+                    console.log('Service Worker Registered');
+                }).catch((err) => {
+                    console.log('Service Worker Failed', err);
+                });
+            });
+        }
+    </script>
+
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
         // --- Helper Icons (SVG) ---
-        // Dibungkus dengan fragment <>...</> untuk menghindari Adjacent JSX error
         const Icon = ({ name, size = 20, className = "" }) => {
             const icons = {
                 dashboard: (
@@ -133,64 +175,39 @@
                         <line x1="18" y1="6" x2="6" y2="18"/>
                         <line x1="6" y1="6" x2="18" y2="18"/>
                     </>
+                ),
+                trendingUp: (
+                    <>
+                        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                        <polyline points="17 6 23 6 23 12"/>
+                    </>
                 )
             };
             return (
-                <svg 
-                    viewBox="0 0 24 24" 
-                    width={size} 
-                    height={size} 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="2" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    className={className}
-                >
+                <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                     {icons[name] || null}
                 </svg>
             );
         };
 
         const App = () => {
-            const [user] = useState({ uid: 'user-' + Math.random().toString(36).substr(2, 9) });
             const [transactions, setTransactions] = useState([]);
             const [categories, setCategories] = useState([]);
             const [activeTab, setActiveTab] = useState('dashboard');
             const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
             const [showAddModal, setShowAddModal] = useState(false);
-            const [formData, setFormData] = useState({
-                amount: '',
-                type: 'income',
-                category: '',
-                note: '',
-                date: new Date().toISOString().split('T')[0]
-            });
-
+            const [formData, setFormData] = useState({ amount: '', type: 'income', category: '', note: '', date: new Date().toISOString().split('T')[0] });
             const [newCatName, setNewCatName] = useState('');
             const [newCatType, setNewCatType] = useState('expense');
 
             useEffect(() => {
                 const handleResize = () => setIsMobile(window.innerWidth < 768);
                 window.addEventListener('resize', handleResize);
-                
                 const savedTrans = localStorage.getItem('umkm_transactions');
                 const savedCats = localStorage.getItem('umkm_categories');
-                
                 if (savedTrans) setTransactions(JSON.parse(savedTrans));
-                if (savedCats) {
-                    setCategories(JSON.parse(savedCats));
-                } else {
-                    const defaults = [
-                        { id: '1', name: 'Penjualan', type: 'income' },
-                        { id: '2', name: 'Modal', type: 'income' },
-                        { id: '3', name: 'Belanja Stok', type: 'expense' },
-                        { id: '4', name: 'Gaji', type: 'expense' },
-                        { id: '5', name: 'Operasional', type: 'expense' },
-                        { id: '6', name: 'Lainnya', type: 'expense' }
-                    ];
-                    setCategories(defaults);
-                }
+                if (savedCats) setCategories(JSON.parse(savedCats));
+                else setCategories([{ id: '1', name: 'Penjualan', type: 'income' }, { id: '2', name: 'Modal', type: 'income' }, { id: '3', name: 'Stok', type: 'expense' }, { id: '4', name: 'Gaji', type: 'expense' }, { id: '5', name: 'Operasional', type: 'expense' }, { id: '6', name: 'Lainnya', type: 'expense' }]);
                 return () => window.removeEventListener('resize', handleResize);
             }, []);
 
@@ -201,7 +218,7 @@
 
             useEffect(() => {
                 const filtered = categories.filter(c => c.type === formData.type);
-                if (filtered.length > 0 && !formData.category) {
+                if (filtered.length > 0 && (!formData.category || !filtered.some(f => f.name === formData.category))) {
                     setFormData(prev => ({ ...prev, category: filtered[0].name }));
                 }
             }, [formData.type, categories, showAddModal]);
@@ -212,6 +229,22 @@
                 return { income, expense, balance: income - expense };
             }, [transactions]);
 
+            const reportData = useMemo(() => {
+                const months = [];
+                for (let i = 5; i >= 0; i--) {
+                    const d = new Date(); d.setMonth(d.getMonth() - i);
+                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    const label = d.toLocaleString('id-ID', { month: 'short' });
+                    months.push({ key, label, income: 0, expense: 0 });
+                }
+                transactions.forEach(t => {
+                    const monthKey = t.date.substring(0, 7);
+                    const found = months.find(m => m.key === monthKey);
+                    if (found) { t.type === 'income' ? found.income += Number(t.amount) : found.expense += Number(t.amount); }
+                });
+                return months;
+            }, [transactions]);
+
             const formatIDR = (amount) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
 
             const handleAddTransaction = (e) => {
@@ -219,7 +252,7 @@
                 if (!formData.amount || !formData.note) return;
                 setTransactions([{ ...formData, id: Date.now().toString(), amount: Number(formData.amount) }, ...transactions]);
                 setShowAddModal(false);
-                setFormData({ amount: '', type: 'income', category: '', note: '', date: new Date().toISOString().split('T')[0] });
+                setFormData({ ...formData, amount: '', note: '', date: new Date().toISOString().split('T')[0] });
             };
 
             const deleteTransaction = (id) => setTransactions(transactions.filter(t => t.id !== id));
@@ -233,218 +266,166 @@
 
             const deleteCategory = (id) => setCategories(categories.filter(c => c.id !== id));
 
+            const BarChart = ({ data }) => {
+                const maxVal = Math.max(...data.map(d => Math.max(d.income, d.expense)), 1000);
+                const height = 150; const width = 400; const barWidth = 12; const gap = 45;
+                return (
+                    <svg viewBox={`0 0 ${width} ${height + 30}`} className="w-full h-auto">
+                        {data.map((d, i) => {
+                            const incH = (d.income / maxVal) * height; const expH = (d.expense / maxVal) * height;
+                            const x = i * (barWidth * 2 + gap) + 30;
+                            return (
+                                <g key={i}>
+                                    <rect x={x} y={height - incH} width={barWidth} height={incH} fill="#10b981" rx="3" />
+                                    <rect x={x + barWidth + 4} y={height - expH} width={barWidth} height={expH} fill="#ef4444" rx="3" />
+                                    <text x={x + barWidth} y={height + 20} textAnchor="middle" fontSize="10" fill="#94a3b8" fontWeight="bold">{d.label}</text>
+                                </g>
+                            );
+                        })}
+                        <line x1="0" y1={height} x2={width} y2={height} stroke="#f1f5f9" strokeWidth="2" />
+                    </svg>
+                );
+            };
+
+            const AnalysisSummary = () => {
+                const total = stats.income + stats.expense || 1;
+                const incP = Math.round((stats.income / total) * 100);
+                const expP = 100 - incP;
+                const margin = stats.income > 0 ? Math.round(((stats.income - stats.expense) / stats.income) * 100) : 0;
+                return (
+                    <div className="space-y-6">
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-end"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pemasukan</p><span className="text-xs font-black text-emerald-600">{incP}%</span></div>
+                            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-emerald-500 transition-all duration-700" style={{ width: `${incP}%` }}></div></div>
+                        </div>
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-end"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pengeluaran</p><span className="text-xs font-black text-rose-600">{expP}%</span></div>
+                            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-rose-500 transition-all duration-700" style={{ width: `${expP}%` }}></div></div>
+                        </div>
+                        <div className="pt-4 border-t border-slate-50">
+                            <div className={`p-4 rounded-2xl flex items-center gap-3 ${margin >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                                <Icon name="trendingUp" size={20} />
+                                <div><p className="text-[10px] font-black uppercase opacity-70">Margin Laba</p><p className="text-sm font-black">{margin}% dari omzet</p></div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
             const TransactionItem = ({ item }) => (
                 <div className="flex items-center justify-between p-4 bg-white hover:bg-slate-50 border-b border-slate-50 transition-all group">
                     <div className="flex items-center gap-4">
-                        <div className={`p-3 rounded-2xl ${item.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                            <Icon name={item.type === 'income' ? 'income' : 'expense'} size={20} />
-                        </div>
-                        <div>
-                            <p className="font-bold text-slate-800 text-sm leading-tight">{item.note}</p>
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase">{item.date}</span>
-                                <span className="text-[10px] text-slate-200 font-bold">•</span>
-                                <span className="bg-slate-100 text-slate-500 text-[9px] px-2 py-0.5 rounded font-bold uppercase">{item.category}</span>
-                            </div>
-                        </div>
+                        <div className={`p-3 rounded-2xl ${item.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}><Icon name={item.type === 'income' ? 'income' : 'expense'} /></div>
+                        <div><p className="font-bold text-slate-800 text-sm">{item.note}</p><p className="text-[9px] font-bold text-slate-400 uppercase">{item.date} • {item.category}</p></div>
                     </div>
-                    <div className="flex items-center gap-4">
-                        <p className={`font-black text-sm ${item.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            {item.type === 'income' ? '+' : '-'} {formatIDR(item.amount)}
-                        </p>
-                        <button onClick={() => deleteTransaction(item.id)} className="opacity-0 group-hover:opacity-100 p-2 text-slate-300 hover:text-rose-500 transition-all no-print">
-                            <Icon name="trash" size={16} />
-                        </button>
+                    <div className="flex items-center gap-3">
+                        <p className={`font-black text-sm ${item.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>{item.type === 'income' ? '+' : '-'} {formatIDR(item.amount)}</p>
+                        <button onClick={() => deleteTransaction(item.id)} className="opacity-0 group-hover:opacity-100 p-2 text-slate-300 hover:text-rose-500 no-print"><Icon name="trash" size={16} /></button>
                     </div>
-                </div>
-            );
-
-            // Desktop View
-            const DesktopView = () => (
-                <div className="flex min-h-screen">
-                    <aside className="w-72 bg-white border-r border-slate-200 p-8 flex flex-col gap-10 no-print">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100">
-                                <Icon name="wallet" size={24} />
-                            </div>
-                            <h1 className="text-xl font-black text-slate-900 leading-none">CASHFLOW <span className="block text-[9px] text-blue-500 tracking-[0.3em] mt-1">UMKM PRO</span></h1>
-                        </div>
-                        <nav className="flex flex-col gap-2 flex-1">
-                            <button onClick={() => setActiveTab('dashboard')} className={`flex items-center gap-4 px-5 py-4 rounded-2xl font-bold transition-all ${activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400 hover:bg-slate-50'}`}><Icon name="dashboard" /> Dashboard</button>
-                            <button onClick={() => setActiveTab('reports')} className={`flex items-center gap-4 px-5 py-4 rounded-2xl font-bold transition-all ${activeTab === 'reports' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400 hover:bg-slate-50'}`}><Icon name="reports" /> Analisis</button>
-                            <button onClick={() => setActiveTab('history')} className={`flex items-center gap-4 px-5 py-4 rounded-2xl font-bold transition-all ${activeTab === 'history' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400 hover:bg-slate-50'}`}><Icon name="history" /> Riwayat</button>
-                            <button onClick={() => setActiveTab('settings')} className={`flex items-center gap-4 px-5 py-4 rounded-2xl font-bold transition-all ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400 hover:bg-slate-50'}`}><Icon name="settings" /> Pengaturan</button>
-                        </nav>
-                        <div className="mt-auto space-y-4">
-                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                <p className="text-[10px] font-black text-slate-400 uppercase mb-2">SINKRONISASI</p>
-                                <div className="flex items-center gap-2 text-emerald-600 font-bold text-xs"><Icon name="cloud" size={14}/> ONLINE & AKTIF</div>
-                            </div>
-                            <button onClick={() => window.print()} className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-slate-900 text-white font-bold text-sm hover:bg-black transition-all"><Icon name="printer" size={18} /> CETAK PDF</button>
-                        </div>
-                    </aside>
-                    <main className="flex-1 p-12 overflow-y-auto max-h-screen">
-                        <header className="flex justify-between items-center mb-10 no-print">
-                            <h2 className="text-3xl font-black text-slate-900 capitalize">{activeTab}</h2>
-                            <button onClick={() => setShowAddModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-3 shadow-xl shadow-blue-200 transition-all active:scale-95"><Icon name="plus" size={22} /> TRANSAKSI BARU</button>
-                        </header>
-                        <div className="fade-in">
-                            {activeTab === 'dashboard' && (
-                                <div className="space-y-10">
-                                    <div className="grid grid-cols-3 gap-8">
-                                        <div className="p-8 bg-white rounded-[32px] border border-slate-100 shadow-sm card flex items-center justify-between">
-                                            <div><p className="text-xs font-black text-slate-400 uppercase mb-2">Saldo</p><h3 className="text-2xl font-black text-blue-600">{formatIDR(stats.balance)}</h3></div>
-                                            <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl no-print"><Icon name="wallet" size={24}/></div>
-                                        </div>
-                                        <div className="p-8 bg-white rounded-[32px] border border-slate-100 shadow-sm card flex items-center justify-between">
-                                            <div><p className="text-xs font-black text-slate-400 uppercase mb-2">Masuk</p><h3 className="text-2xl font-black text-emerald-600">{formatIDR(stats.income)}</h3></div>
-                                            <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl no-print"><Icon name="income" size={24}/></div>
-                                        </div>
-                                        <div className="p-8 bg-white rounded-[32px] border border-slate-100 shadow-sm card flex items-center justify-between">
-                                            <div><p className="text-xs font-black text-slate-400 uppercase mb-2">Keluar</p><h3 className="text-2xl font-black text-rose-600">{formatIDR(stats.expense)}</h3></div>
-                                            <div className="p-4 bg-rose-50 text-rose-600 rounded-2xl no-print"><Icon name="expense" size={24}/></div>
-                                        </div>
-                                    </div>
-                                    <div className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-100 card">
-                                        <h3 className="font-black text-xl mb-8">Data Terbaru</h3>
-                                        <div className="space-y-1">
-                                            {transactions.slice(0, 8).map(t => <TransactionItem key={t.id} item={t} />)}
-                                            {transactions.length === 0 && <div className="p-10 text-center text-slate-400 italic">Belum ada transaksi</div>}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                            {activeTab === 'settings' && (
-                                <div className="grid grid-cols-2 gap-10">
-                                    <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
-                                        <h3 className="text-xl font-black mb-6">Kelola Kategori</h3>
-                                        <form onSubmit={handleAddCategory} className="flex gap-2 mb-8">
-                                            <input type="text" placeholder="Kategori baru..." required value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="flex-1 p-4 bg-slate-50 rounded-xl outline-none font-bold text-sm" />
-                                            <select value={newCatType} onChange={(e) => setNewCatType(e.target.value)} className="p-4 bg-slate-50 rounded-xl outline-none font-bold text-sm"><option value="expense">Keluar</option><option value="income">Masuk</option></select>
-                                            <button type="submit" className="p-4 bg-blue-600 text-white rounded-xl shadow-lg hover:bg-blue-700 transition-all"><Icon name="plus" size={20}/></button>
-                                        </form>
-                                        <div className="space-y-2">
-                                            {categories.map(cat => (
-                                                <div key={cat.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                                                    <span className={`text-xs font-black uppercase tracking-widest ${cat.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>{cat.name}</span>
-                                                    <button onClick={() => deleteCategory(cat.id)} className="text-slate-300 hover:text-rose-500"><Icon name="trash" size={16}/></button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                            {activeTab === 'reports' && (
-                                <div className="bg-white p-12 rounded-[48px] shadow-sm border border-slate-100 card text-center">
-                                    <h3 className="text-2xl font-black mb-6">Laporan Kategori</h3>
-                                    <div className="max-w-md mx-auto space-y-4">
-                                        {categories.map((cat, i) => {
-                                            const total = transactions.filter(t => t.category === cat.name).reduce((acc, curr) => acc + Number(curr.amount), 0);
-                                            return (
-                                                <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                                                    <span className="font-bold text-slate-700">{cat.name}</span>
-                                                    <span className={`font-black ${cat.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>{formatIDR(total)}</span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
-                            {activeTab === 'history' && (
-                                <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 p-8 card">
-                                    <h3 className="font-black text-2xl mb-8">Arsip Transaksi</h3>
-                                    <div className="space-y-1">
-                                        {transactions.map(t => <TransactionItem key={t.id} item={t} />)}
-                                        {transactions.length === 0 && <div className="p-20 text-center text-slate-300 italic">Kosong</div>}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </main>
-                </div>
-            );
-
-            // Mobile View
-            const MobileView = () => (
-                <div className="min-h-screen bg-slate-50 pb-32 no-print">
-                    <header className="bg-blue-600 text-white px-6 pt-10 pb-20 rounded-b-[48px] shadow-2xl relative">
-                        <div className="flex justify-between items-center mb-6">
-                            <span className="text-[10px] font-black tracking-widest uppercase opacity-70">UMKM CASHFLOW</span>
-                            <div className="flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full text-[9px] font-black"><Icon name="cloud" size={10} /> CLOUD</div>
-                        </div>
-                        <div className="text-center">
-                            <p className="text-blue-200 text-[10px] font-black uppercase tracking-[0.3em] mb-1">Saldo Bisnis</p>
-                            <h2 className="text-4xl font-black tracking-tighter">{formatIDR(stats.balance)}</h2>
-                        </div>
-                    </header>
-                    <main className="px-6 -mt-10 relative z-10 fade-in">
-                        <div className="bg-white rounded-[40px] p-6 shadow-sm min-h-[50vh]">
-                            <h3 className="text-lg font-black mb-6 border-b border-slate-50 pb-4 capitalize">{activeTab}</h3>
-                            {activeTab === 'dashboard' && transactions.slice(0, 15).map(t => <TransactionItem key={t.id} item={t} />)}
-                            {activeTab === 'history' && transactions.map(t => <TransactionItem key={t.id} item={t} />)}
-                            {activeTab === 'settings' && (
-                                <div className="space-y-4">
-                                    <form onSubmit={handleAddCategory} className="space-y-2">
-                                        <input type="text" placeholder="Kategori" required value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm" />
-                                        <div className="flex gap-2">
-                                            <select value={newCatType} onChange={(e) => setNewCatType(e.target.value)} className="flex-1 p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm"><option value="expense">Keluar</option><option value="income">Masuk</option></select>
-                                            <button type="submit" className="px-6 bg-blue-600 text-white rounded-2xl"><Icon name="plus" size={20}/></button>
-                                        </div>
-                                    </form>
-                                    <div className="space-y-2 pt-4">
-                                        {categories.map(cat => (
-                                            <div key={cat.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                                                <span className="text-[10px] font-black uppercase text-slate-600">{cat.name}</span>
-                                                <button onClick={() => deleteCategory(cat.id)} className="text-slate-300"><Icon name="trash" size={14}/></button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            {activeTab === 'reports' && categories.map((cat, i) => {
-                                const total = transactions.filter(t => t.category === cat.name).reduce((acc, curr) => acc + Number(curr.amount), 0);
-                                return (
-                                    <div key={i} className="flex justify-between p-4 bg-slate-50 rounded-2xl text-xs font-bold mb-2">
-                                        <span>{cat.name}</span><span className={cat.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}>{formatIDR(total)}</span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </main>
-                    <nav className="fixed bottom-6 left-6 right-6 bg-slate-900/95 backdrop-blur-xl rounded-[32px] flex justify-around items-center py-5 px-4 z-40 shadow-2xl no-print border border-white/10">
-                        <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 ${activeTab === 'dashboard' ? 'text-blue-400' : 'text-slate-500'}`}><Icon name="dashboard" size={20} /><span className="text-[7px] font-black uppercase tracking-widest">Home</span></button>
-                        <button onClick={() => setActiveTab('reports')} className={`flex flex-col items-center gap-1 ${activeTab === 'reports' ? 'text-blue-400' : 'text-slate-500'}`}><Icon name="reports" size={20} /><span className="text-[7px] font-black uppercase tracking-widest">Report</span></button>
-                        <div className="relative -top-10"><button onClick={() => setShowAddModal(true)} className="bg-blue-600 text-white w-16 h-16 rounded-[24px] flex items-center justify-center shadow-2xl border-4 border-slate-50 active:scale-90 transition-transform"><Icon name="plus" size={32} /></button></div>
-                        <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center gap-1 ${activeTab === 'history' ? 'text-blue-400' : 'text-slate-500'}`}><Icon name="history" size={20} /><span className="text-[7px] font-black uppercase tracking-widest">Arsip</span></button>
-                        <button onClick={() => setActiveTab('settings')} className={`flex flex-col items-center gap-1 ${activeTab === 'settings' ? 'text-blue-400' : 'text-slate-500'}`}><Icon name="settings" size={20} /><span className="text-[7px] font-black uppercase tracking-widest">Atur</span></button>
-                    </nav>
                 </div>
             );
 
             return (
                 <div className="min-h-screen">
-                    {isMobile ? <MobileView /> : <DesktopView />}
+                    {/* DESKTOP */}
+                    {!isMobile && (
+                        <div className="flex min-h-screen">
+                            <aside className="w-72 bg-white border-r border-slate-200 p-8 flex flex-col gap-8 no-print">
+                                <div className="flex items-center gap-3"><div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg"><Icon name="wallet" /></div><h1 className="text-xl font-black">CASHFLOW</h1></div>
+                                <nav className="flex flex-col gap-2 flex-1">
+                                    {['dashboard', 'reports', 'history', 'settings'].map(t => (
+                                        <button key={t} onClick={() => setActiveTab(t)} className={`flex items-center gap-4 px-5 py-4 rounded-2xl font-bold transition-all ${activeTab === t ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Icon name={t} /> {t.charAt(0).toUpperCase() + t.slice(1)}</button>
+                                    ))}
+                                </nav>
+                                <button onClick={() => window.print()} className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-slate-900 text-white font-bold text-sm"><Icon name="printer" /> CETAK PDF</button>
+                            </aside>
+                            <main className="flex-1 p-12 overflow-y-auto">
+                                <header className="flex justify-between items-center mb-10 no-print">
+                                    <h2 className="text-3xl font-black capitalize">{activeTab === 'dashboard' ? 'Overview' : activeTab}</h2>
+                                    <button onClick={() => setShowAddModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-3 shadow-xl transition-all"><Icon name="plus" /> CATAT BARU</button>
+                                </header>
+                                <div className="fade-in">
+                                    {activeTab === 'dashboard' && (
+                                        <div className="space-y-8">
+                                            <div className="grid grid-cols-3 gap-6">
+                                                <div className="p-8 bg-white rounded-[32px] border border-slate-100 shadow-sm card flex items-center justify-between"><div><p className="text-xs font-black text-slate-400 mb-1 uppercase">Saldo</p><h3 className="text-2xl font-black text-blue-600">{formatIDR(stats.balance)}</h3></div><div className="p-4 bg-blue-50 text-blue-600 rounded-2xl no-print"><Icon name="wallet" /></div></div>
+                                                <div className="p-8 bg-white rounded-[32px] border border-slate-100 shadow-sm card flex items-center justify-between"><div><p className="text-xs font-black text-slate-400 mb-1 uppercase">Masuk</p><h3 className="text-2xl font-black text-emerald-600">{formatIDR(stats.income)}</h3></div><div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl no-print"><Icon name="income" /></div></div>
+                                                <div className="p-8 bg-white rounded-[32px] border border-slate-100 shadow-sm card flex items-center justify-between"><div><p className="text-xs font-black text-slate-400 mb-1 uppercase">Keluar</p><h3 className="text-2xl font-black text-rose-600">{formatIDR(stats.expense)}</h3></div><div className="p-4 bg-rose-50 text-rose-600 rounded-2xl no-print"><Icon name="expense" /></div></div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-8">
+                                                <div className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-100 card"><h3 className="font-black text-xl mb-8">Tren Kas</h3><BarChart data={reportData} /></div>
+                                                <div className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-100 card"><h3 className="font-black text-xl mb-8">Analisis Arus</h3><AnalysisSummary /></div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {activeTab === 'reports' && (
+                                        <div className="bg-white p-10 rounded-[40px] border border-slate-100"><h3 className="text-xl font-black mb-8 text-center">Rekap Kategori</h3><div className="max-w-md mx-auto space-y-3">{categories.map(c => { const val = transactions.filter(t => t.category === c.name).reduce((a, b) => a + Number(b.amount), 0); return (<div key={c.id} className="flex justify-between p-4 bg-slate-50 rounded-2xl font-bold"><span className="text-slate-600">{c.name}</span><span className={c.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}>{formatIDR(val)}</span></div>); })}</div></div>
+                                    )}
+                                    {activeTab === 'history' && (
+                                        <div className="bg-white p-8 rounded-[40px] border border-slate-100"><h3 className="font-black text-xl mb-8">Riwayat Lengkap</h3><div className="space-y-1">{transactions.map(t => <TransactionItem key={t.id} item={t} />)}</div></div>
+                                    )}
+                                    {activeTab === 'settings' && (
+                                        <div className="bg-white p-10 rounded-[40px] border border-slate-100 max-w-2xl mx-auto">
+                                            <h3 className="text-xl font-black mb-6">Manajemen Kategori</h3>
+                                            <form onSubmit={handleAddCategory} className="flex gap-2 mb-8"><input type="text" placeholder="Kategori..." required value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="flex-1 p-4 bg-slate-50 rounded-xl outline-none font-bold" /><select value={newCatType} onChange={(e) => setNewCatType(e.target.value)} className="p-4 bg-slate-50 rounded-xl outline-none font-bold"><option value="expense">Keluar</option><option value="income">Masuk</option></select><button type="submit" className="p-4 bg-blue-600 text-white rounded-xl"><Icon name="plus" /></button></form>
+                                            <div className="space-y-2">{categories.map(c => (<div key={c.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl"><span className="font-black text-xs uppercase text-slate-600">{c.name} ({c.type})</span><button onClick={() => deleteCategory(c.id)} className="text-slate-300 hover:text-rose-500"><Icon name="trash" size={16}/></button></div>))}</div>
+                                        </div>
+                                    )}
+                                </div>
+                            </main>
+                        </div>
+                    )}
+
+                    {/* MOBILE */}
+                    {isMobile && (
+                        <div className="min-h-screen pb-32">
+                            <header className="bg-blue-600 text-white px-6 pt-10 pb-20 rounded-b-[48px] shadow-2xl relative no-print">
+                                <div className="flex justify-between items-center mb-6 opacity-70"><span className="text-[10px] font-black uppercase tracking-widest">CASHFLOW</span><Icon name="cloud" size={12} /></div>
+                                <div className="text-center"><p className="text-blue-200 text-[10px] font-black uppercase tracking-[0.3em] mb-1">Saldo Bisnis</p><h2 className="text-4xl font-black tracking-tighter">{formatIDR(stats.balance)}</h2></div>
+                            </header>
+                            <main className="px-6 -mt-10 relative z-10 fade-in">
+                                <div className="bg-white rounded-[40px] p-8 shadow-xl min-h-[50vh]">
+                                    <h3 className="text-lg font-black mb-8 border-b border-slate-50 pb-4 capitalize">{activeTab === 'dashboard' ? 'Ringkasan Arus Kas' : activeTab}</h3>
+                                    {activeTab === 'dashboard' && <AnalysisSummary />}
+                                    {activeTab === 'history' && transactions.map(t => <TransactionItem key={t.id} item={t} />)}
+                                    {activeTab === 'reports' && categories.map(c => { const val = transactions.filter(t => t.category === c.name).reduce((a, b) => a + Number(b.amount), 0); return (<div key={c.id} className="flex justify-between p-4 bg-slate-50 rounded-2xl text-xs font-bold mb-2"><span>{c.name}</span><span className={c.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}>{formatIDR(val)}</span></div>); })}
+                                    {activeTab === 'settings' && (
+                                        <div className="space-y-6">
+                                            <form onSubmit={handleAddCategory} className="space-y-2"><input type="text" placeholder="Kategori" required value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold" /><div className="flex gap-2"><select value={newCatType} onChange={(e) => setNewCatType(e.target.value)} className="flex-1 p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm"><option value="expense">Keluar</option><option value="income">Masuk</option></select><button type="submit" className="px-6 bg-blue-600 text-white rounded-2xl"><Icon name="plus" /></button></div></form>
+                                            <div className="space-y-2">{categories.map(c => (<div key={c.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl"><span className="text-[10px] font-black text-slate-600 uppercase">{c.name}</span><button onClick={() => deleteCategory(c.id)} className="text-slate-300"><Icon name="trash" size={14}/></button></div>))}</div>
+                                        </div>
+                                    )}
+                                </div>
+                            </main>
+                            <nav className="fixed bottom-6 left-6 right-6 bg-slate-900/95 backdrop-blur-xl rounded-[32px] flex justify-around items-center py-5 px-4 z-40 shadow-2xl no-print border border-white/10">
+                                <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 ${activeTab === 'dashboard' ? 'text-blue-400' : 'text-slate-500'}`}><Icon name="dashboard" /><span className="text-[7px] font-black uppercase">Home</span></button>
+                                <button onClick={() => setActiveTab('reports')} className={`flex flex-col items-center gap-1 ${activeTab === 'reports' ? 'text-blue-400' : 'text-slate-500'}`}><Icon name="reports" /><span className="text-[7px] font-black uppercase">Report</span></button>
+                                <div className="relative -top-10"><button onClick={() => setShowAddModal(true)} className="bg-blue-600 text-white w-16 h-16 rounded-[24px] flex items-center justify-center shadow-2xl border-4 border-slate-50 active:scale-90 transition-transform"><Icon name="plus" size={32} /></button></div>
+                                <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center gap-1 ${activeTab === 'history' ? 'text-blue-400' : 'text-slate-500'}`}><Icon name="history" /><span className="text-[7px] font-black uppercase">Arsip</span></button>
+                                <button onClick={() => setActiveTab('settings')} className={`flex flex-col items-center gap-1 ${activeTab === 'settings' ? 'text-blue-400' : 'text-slate-500'}`}><Icon name="settings" /><span className="text-[7px] font-black uppercase">Atur</span></button>
+                            </nav>
+                        </div>
+                    )}
+
+                    {/* MODAL */}
                     {showAddModal && (
                         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-end md:items-center justify-center p-0 md:p-10 no-print">
-                            <div className="bg-white w-full max-w-xl rounded-t-[40px] md:rounded-[40px] p-8 md:p-10 animate-in slide-in-from-bottom duration-300 shadow-2xl overflow-y-auto max-h-[90vh]">
-                                <div className="flex justify-between items-center mb-10">
-                                    <h2 className="text-xl font-black text-slate-900">Catat Transaksi</h2>
-                                    <button onClick={() => setShowAddModal(false)} className="p-3 bg-slate-100 rounded-2xl"><Icon name="x" size={20} /></button>
-                                </div>
+                            <div className="bg-white w-full max-w-xl rounded-t-[40px] md:rounded-[40px] p-8 md:p-10 animate-in slide-in-from-bottom shadow-2xl overflow-y-auto max-h-[90vh]">
+                                <div className="flex justify-between items-center mb-10"><h2 className="text-xl font-black">Catat Kas</h2><button onClick={() => setShowAddModal(false)} className="p-3 bg-slate-100 rounded-2xl"><Icon name="x" /></button></div>
                                 <form onSubmit={handleAddTransaction} className="space-y-6">
                                     <div className="grid grid-cols-2 gap-3">
                                         <button type="button" onClick={() => setFormData({...formData, type: 'income', category: ''})} className={`py-4 rounded-2xl font-black text-xs border-2 transition-all ${formData.type === 'income' ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'border-slate-100 text-slate-400'}`}>MASUK</button>
                                         <button type="button" onClick={() => setFormData({...formData, type: 'expense', category: ''})} className={`py-4 rounded-2xl font-black text-xs border-2 transition-all ${formData.type === 'expense' ? 'bg-rose-50 border-rose-500 text-rose-700' : 'border-slate-100 text-slate-400'}`}>KELUAR</button>
                                     </div>
-                                    <input type="number" required placeholder="0" className="w-full text-4xl font-black p-8 bg-slate-50 rounded-[32px] outline-none border-2 border-transparent focus:border-blue-500 transition-all text-center" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} />
+                                    <input type="number" required placeholder="0" className="w-full text-4xl font-black p-8 bg-slate-50 rounded-[32px] outline-none border-2 border-transparent focus:border-blue-500 text-center" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} />
                                     <div className="grid grid-cols-2 gap-4">
-                                        <select className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm" value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})}>
+                                        <select className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold" value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})}>
                                             {categories.filter(c => c.type === formData.type).map(cat => (<option key={cat.id} value={cat.name}>{cat.name}</option>))}
                                         </select>
-                                        <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
+                                        <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
                                     </div>
-                                    <input type="text" required placeholder="Catatan transaksi..." className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm" value={formData.note} onChange={(e) => setFormData({...formData, note: e.target.value})} />
-                                    <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-[28px] font-black text-lg shadow-xl shadow-blue-100 active:scale-95 transition-all uppercase tracking-widest">SIMPAN KAS</button>
+                                    <input type="text" required placeholder="Keterangan..." className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold" value={formData.note} onChange={(e) => setFormData({...formData, note: e.target.value})} />
+                                    <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-[28px] font-black text-lg active:scale-95 transition-all uppercase tracking-widest">SIMPAN KAS</button>
                                 </form>
                             </div>
                         </div>
@@ -453,8 +434,7 @@
             );
         };
 
-        const container = document.getElementById('root');
-        const root = ReactDOM.createRoot(container);
+        const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
 </body>
