@@ -1,693 +1,547 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  collection, 
-  addDoc, 
-  onSnapshot, 
-  deleteDoc, 
-  doc, 
-  serverTimestamp,
-  setDoc
-} from 'firebase/firestore';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  signInWithCustomToken, 
-  onAuthStateChanged,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signOut
-} from 'firebase/auth';
-import { 
-  LayoutDashboard, 
-  PlusCircle, 
-  ArrowUpCircle, 
-  ArrowDownCircle, 
-  History, 
-  Trash2, 
-  Wallet,
-  X,
-  ChevronRight,
-  Download,
-  Cloud,
-  CloudOff,
-  User,
-  BarChart3,
-  PieChart as PieChartIcon,
-  LogOut,
-  LogIn,
-  TrendingUp,
-  AlertCircle,
-  FileText,
-  Printer,
-  Settings,
-  Plus
-} from 'lucide-react';
-
-// --- Konfigurasi Firebase ---
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'umkm-cashflow-pro';
-
-const App = () => {
-  const [user, setUser] = useState(null);
-  const [transactions, setTransactions] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [isMobile, setIsMobile] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(true);
-  const [errorMsg, setErrorMsg] = useState('');
-
-  const [formData, setFormData] = useState({
-    amount: '',
-    type: 'income',
-    category: '',
-    note: '',
-    date: new Date().toISOString().split('T')[0]
-  });
-
-  const [newCatName, setNewCatName] = useState('');
-  const [newCatType, setNewCatType] = useState('expense');
-
-  // --- Logika Autentikasi ---
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cashflow UMKM Pro - Cloud Sync</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
         }
-      } catch (error) {
-        console.error("Auth error:", error);
-      }
-    };
-    initAuth();
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (!currentUser) {
-        signInAnonymously(auth);
-      }
-    });
-
-    const checkDevice = () => setIsMobile(window.innerWidth < 768);
-    checkDevice();
-    window.addEventListener('resize', checkDevice);
-
-    return () => {
-      unsubscribeAuth();
-      window.removeEventListener('resize', checkDevice);
-    };
-  }, []);
-
-  const handleGoogleLogin = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      setErrorMsg('');
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      setErrorMsg('Gagal masuk dengan Google. Pastikan pop-up diizinkan.');
-      console.error(error);
-    }
-  };
-
-  const handleLogout = () => signOut(auth);
-
-  // --- Pengambilan Data (Transactions & Categories) ---
-  useEffect(() => {
-    if (!user) return;
-
-    setIsSyncing(true);
-    
-    // Listen Transactions
-    const transRef = collection(db, 'artifacts', appId, 'users', user.uid, 'transactions');
-    const unsubscribeTrans = onSnapshot(transRef, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setTransactions(data.sort((a, b) => new Date(b.date) - new Date(a.date)));
-      setIsSyncing(false);
-    });
-
-    // Listen Categories
-    const catRef = collection(db, 'artifacts', appId, 'users', user.uid, 'categories');
-    const unsubscribeCats = onSnapshot(catRef, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      // Seed default categories if none exist
-      if (data.length === 0) {
-        const defaults = [
-          { name: 'Penjualan', type: 'income' },
-          { name: 'Modal', type: 'income' },
-          { name: 'Belanja Stok', type: 'expense' },
-          { name: 'Gaji', type: 'expense' },
-          { name: 'Operasional', type: 'expense' },
-          { name: 'Lainnya', type: 'expense' }
-        ];
-        defaults.forEach(cat => addDoc(catRef, cat));
-      } else {
-        setCategories(data);
-      }
-    });
-
-    return () => {
-      unsubscribeTrans();
-      unsubscribeCats();
-    };
-  }, [user]);
-
-  // Set default category when modal opens or type changes
-  useEffect(() => {
-    const filtered = categories.filter(c => c.type === formData.type);
-    if (filtered.length > 0 && !formData.category) {
-      setFormData(prev => ({ ...prev, category: filtered[0].name }));
-    }
-  }, [formData.type, categories, showAddModal]);
-
-  // --- Kalkulasi Analitik ---
-  const stats = useMemo(() => {
-    const income = transactions
-      .filter(t => t.type === 'income')
-      .reduce((acc, curr) => acc + Number(curr.amount), 0);
-    const expense = transactions
-      .filter(t => t.type === 'expense')
-      .reduce((acc, curr) => acc + Number(curr.amount), 0);
-    return { income, expense, balance: income - expense };
-  }, [transactions]);
-
-  const reportData = useMemo(() => {
-    const months = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date();
-      d.setMonth(d.getMonth() - i);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const label = d.toLocaleString('id-ID', { month: 'short' });
-      months.push({ key, label, income: 0, expense: 0 });
-    }
-
-    transactions.forEach(t => {
-      const monthKey = t.date.substring(0, 7);
-      const found = months.find(m => m.key === monthKey);
-      if (found) {
-        if (t.type === 'income') found.income += Number(t.amount);
-        else found.expense += Number(t.amount);
-      }
-    });
-
-    const expenseCats = {};
-    transactions.filter(t => t.type === 'expense').forEach(t => {
-      expenseCats[t.category] = (expenseCats[t.category] || 0) + Number(t.amount);
-    });
-    
-    const pieData = Object.entries(expenseCats).map(([name, value]) => ({ name, value }));
-    const totalExpense = pieData.reduce((acc, curr) => acc + curr.value, 0);
-
-    return { barData: months, pieData, totalExpense };
-  }, [transactions]);
-
-  const formatIDR = (amount) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(amount);
-  };
-
-  // --- Handlers ---
-  const handleAddTransaction = async (e) => {
-    e.preventDefault();
-    if (!formData.amount || !formData.note || !user) return;
-    
-    try {
-      const colRef = collection(db, 'artifacts', appId, 'users', user.uid, 'transactions');
-      await addDoc(colRef, {
-        ...formData,
-        amount: Number(formData.amount),
-        createdAt: serverTimestamp()
-      });
-      setShowAddModal(false);
-      setFormData({
-        amount: '',
-        type: 'income',
-        category: '',
-        note: '',
-        date: new Date().toISOString().split('T')[0]
-      });
-    } catch (error) {
-      console.error("Error adding: ", error);
-    }
-  };
-
-  const deleteTransaction = async (id) => {
-    if (!user) return;
-    try {
-      const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'transactions', id);
-      await deleteDoc(docRef);
-    } catch (error) {
-      console.error("Error deleting: ", error);
-    }
-  };
-
-  const handleAddCategory = async (e) => {
-    e.preventDefault();
-    if (!newCatName || !user) return;
-    try {
-      const colRef = collection(db, 'artifacts', appId, 'users', user.uid, 'categories');
-      await addDoc(colRef, { name: newCatName, type: newCatType });
-      setNewCatName('');
-    } catch (error) {
-      console.error("Error adding category:", error);
-    }
-  };
-
-  const deleteCategory = async (id) => {
-    if (!user) return;
-    try {
-      const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'categories', id);
-      await deleteDoc(docRef);
-    } catch (error) {
-      console.error("Error deleting category:", error);
-    }
-  };
-
-  const handlePrintPDF = () => window.print();
-
-  // --- UI Components (Charts & Items) ---
-  const BarChart = ({ data }) => {
-    const maxVal = Math.max(...data.map(d => Math.max(d.income, d.expense)), 1000);
-    const height = 200;
-    const width = 400;
-    const barWidth = 15;
-    const gap = 40;
-
-    return (
-      <svg viewBox={`0 0 ${width} ${height + 40}`} className="w-full h-auto">
-        {data.map((d, i) => {
-          const incH = (d.income / maxVal) * height;
-          const expH = (d.expense / maxVal) * height;
-          const x = i * (barWidth * 2 + gap) + 40;
-          return (
-            <g key={i}>
-              <rect x={x} y={height - incH} width={barWidth} height={incH} fill="#10b981" rx="4" />
-              <rect x={x + barWidth + 4} y={height - expH} width={barWidth} height={expH} fill="#ef4444" rx="4" />
-              <text x={x + barWidth} y={height + 25} textAnchor="middle" fontSize="12" fill="#9ca3af" fontWeight="bold">{d.label}</text>
-            </g>
-          );
-        })}
-        <line x1="0" y1={height} x2={width} y2={height} stroke="#e5e7eb" strokeWidth="1" />
-      </svg>
-    );
-  };
-
-  const SimplePieChart = ({ data, total }) => {
-    if (data.length === 0) return <div className="text-center py-10 text-gray-400 italic font-medium">Belum ada data pengeluaran</div>;
-    let cumulativeAngle = 0;
-    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
-    return (
-      <div className="flex flex-col md:flex-row items-center gap-8">
-        <svg viewBox="0 0 100 100" className="w-48 h-48 transform -rotate-90">
-          {data.map((slice, i) => {
-            const angle = (slice.value / total) * 360;
-            const x1 = 50 + 40 * Math.cos((cumulativeAngle * Math.PI) / 180);
-            const y1 = 50 + 40 * Math.sin((cumulativeAngle * Math.PI) / 180);
-            cumulativeAngle += angle;
-            const x2 = 50 + 40 * Math.cos((cumulativeAngle * Math.PI) / 180);
-            const y2 = 50 + 40 * Math.sin((cumulativeAngle * Math.PI) / 180);
-            const largeArcFlag = angle > 180 ? 1 : 0;
-            return (
-              <path key={i} d={`M 50 50 L ${x1} ${y1} A 40 40 0 ${largeArcFlag} 1 ${x2} ${y2} Z`} fill={colors[i % colors.length]} stroke="white" strokeWidth="1" />
-            );
-          })}
-        </svg>
-        <div className="flex-1 space-y-3">
-          {data.map((slice, i) => (
-            <div key={i} className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[i % colors.length] }}></div>
-                <span className="font-bold text-gray-600">{slice.name}</span>
-              </div>
-              <span className="font-black text-gray-900">{((slice.value / total) * 100).toFixed(1)}%</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const TransactionItem = ({ item }) => (
-    <div className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 border-b border-gray-50 transition-all group">
-      <div className="flex items-center gap-4">
-        <div className={`p-3 rounded-2xl ${item.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-          {item.type === 'income' ? <ArrowUpCircle size={22} /> : <ArrowDownCircle size={22} />}
-        </div>
-        <div>
-          <p className="font-black text-gray-800 leading-tight">{item.note}</p>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-[10px] font-bold text-gray-400 uppercase">{new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
-            <span className="text-[10px] text-gray-300 font-bold tracking-widest px-2 py-0.5 bg-gray-100 rounded text-gray-500">{item.category}</span>
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-4">
-        <p className={`font-black text-lg ${item.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
-          {item.type === 'income' ? '+' : '-'} {formatIDR(item.amount)}
-        </p>
-        <button onClick={() => deleteTransaction(item.id)} className="opacity-0 group-hover:opacity-100 p-2 text-gray-300 hover:text-rose-500 transition-all no-print">
-          <Trash2 size={18} />
-        </button>
-      </div>
-    </div>
-  );
-
-  // --- Views ---
-  const DesktopLayout = () => (
-    <div className="flex min-h-screen bg-slate-50 font-sans text-slate-900">
-      <style>{`
         @media print {
-          .no-print { display: none !important; }
-          body { background: white !important; }
-          main { padding: 0 !important; overflow: visible !important; max-height: none !important; }
-          .print-container { display: block !important; }
-          aside { display: none !important; }
-          header { display: none !important; }
-          .card { border: 1px solid #eee !important; box-shadow: none !important; }
+            .no-print { display: none !important; }
+            body { background: white !important; }
+            .print-container { display: block !important; }
+            .card { border: 1px solid #eee !important; box-shadow: none !important; }
         }
-      `}</style>
 
-      {/* Sidebar */}
-      <aside className="w-80 bg-white border-r border-slate-200 p-8 flex flex-col gap-10 no-print">
-        <div className="flex items-center gap-4">
-          <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-xl shadow-blue-100">
-            <Wallet size={28} />
-          </div>
-          <div>
-            <h1 className="text-xl font-black text-slate-900 leading-none">CASHFLOW</h1>
-            <p className="text-[10px] font-black text-blue-500 tracking-[0.3em] mt-1 uppercase">UMKM Pro</p>
-          </div>
-        </div>
+        /* Smooth tab transition */
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="root"></div>
 
-        <nav className="flex flex-col gap-2 flex-1">
-          <button onClick={() => setActiveTab('dashboard')} className={`flex items-center gap-4 px-6 py-4 rounded-2xl font-black transition-all ${activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}>
-            <LayoutDashboard size={20} /> Dashboard
-          </button>
-          <button onClick={() => setActiveTab('reports')} className={`flex items-center gap-4 px-6 py-4 rounded-2xl font-black transition-all ${activeTab === 'reports' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}>
-            <BarChart3 size={20} /> Laporan Detail
-          </button>
-          <button onClick={() => setActiveTab('history')} className={`flex items-center gap-4 px-6 py-4 rounded-2xl font-black transition-all ${activeTab === 'history' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}>
-            <History size={20} /> Riwayat Kas
-          </button>
-          <button onClick={() => setActiveTab('settings')} className={`flex items-center gap-4 px-6 py-4 rounded-2xl font-black transition-all ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}>
-            <Settings size={20} /> Pengaturan
-          </button>
-        </nav>
+    <script type="text/babel">
+        // Dekonstruksi hooks dari React
+        const { useState, useEffect, useMemo } = React;
 
-        <div className="mt-auto space-y-4">
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black ${isSyncing ? 'bg-amber-50 text-amber-600' : 'bg-green-50 text-green-600'}`}>
-            {isSyncing ? <CloudOff size={12} className="animate-pulse" /> : <Cloud size={12} />}
-            {isSyncing ? 'SINKRONISASI...' : 'CLOUD AKTIF'}
-          </div>
-          {user?.isAnonymous ? (
-            <button onClick={handleGoogleLogin} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white border-2 border-slate-200 rounded-2xl font-black text-xs hover:border-blue-500 hover:text-blue-600 transition-all">
-              <LogIn size={16}/> MASUK GOOGLE
-            </button>
-          ) : (
-            <div className="p-5 rounded-3xl bg-slate-50 border border-slate-100 space-y-3">
-              <div className="flex items-center gap-3">
-                <img src={user?.photoURL} alt="User" className="w-8 h-8 rounded-full border border-blue-200" />
-                <div className="overflow-hidden">
-                  <p className="text-xs font-black truncate">{user?.displayName}</p>
-                  <p className="text-[9px] text-slate-400 truncate">{user?.email}</p>
-                </div>
-              </div>
-              <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 text-xs font-black text-rose-500 hover:bg-rose-50 p-2 rounded-xl transition-all">
-                <LogOut size={14}/> KELUAR
-              </button>
-            </div>
-          )}
-        </div>
-      </aside>
+        // Firebase Mock atau Real (Environment menyediakan Firebase lewat Global)
+        // Jika Anda menggunakan Firebase sendiri, ganti config di bawah ini.
+        const firebaseConfig = JSON.parse(window.__firebase_config || '{}');
+        
+        // Catatan: Di lingkungan Canvas, Firebase SDK diimpor secara berbeda.
+        // Untuk versi HTML mandiri, kita asumsikan script SDK sudah ada atau menggunakan mock jika tidak terdeteksi.
+        
+        const App = () => {
+            const [user, setUser] = useState({ uid: 'guest-' + Math.random().toString(36).substr(2, 9), isAnonymous: true });
+            const [transactions, setTransactions] = useState([]);
+            const [categories, setCategories] = useState([]);
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+            const [showAddModal, setShowAddModal] = useState(false);
+            const [isSyncing, setIsSyncing] = useState(false);
+            const [errorMsg, setErrorMsg] = useState('');
 
-      {/* Main Content */}
-      <main className="flex-1 p-12 overflow-y-auto max-h-screen">
-        <header className="flex justify-between items-center mb-10 no-print">
-          <div>
-            <h2 className="text-3xl font-black">
-              {activeTab === 'settings' ? 'Pengaturan Bisnis' : 'Analisis Keuangan'}
-            </h2>
-            <p className="text-slate-400 font-medium">Data real-time untuk keputusan bisnis tepat.</p>
-          </div>
-          <div className="flex gap-4">
-            <button onClick={handlePrintPDF} className="bg-white border-2 border-slate-200 text-slate-600 px-6 py-4 rounded-2xl font-black flex items-center gap-3 hover:border-blue-500 hover:text-blue-600 transition-all active:scale-95">
-              <Printer size={20} /> CETAK PDF
-            </button>
-            <button onClick={() => setShowAddModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-3 shadow-xl shadow-blue-200 active:scale-95 transition-all">
-              <PlusCircle size={22} /> TRANSAKSI BARU
-            </button>
-          </div>
-        </header>
+            const [formData, setFormData] = useState({
+                amount: '',
+                type: 'income',
+                category: '',
+                note: '',
+                date: new Date().toISOString().split('T')[0]
+            });
 
-        {activeTab === 'dashboard' && (
-          <div className="space-y-10">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="p-8 bg-white rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between card">
-                <div><p className="text-xs font-black text-slate-400 uppercase mb-2">Total Saldo</p><h3 className="text-2xl font-black text-blue-600">{formatIDR(stats.balance)}</h3></div>
-                <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl no-print"><Wallet size={24}/></div>
-              </div>
-              <div className="p-8 bg-white rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between card">
-                <div><p className="text-xs font-black text-slate-400 uppercase mb-2">Pemasukan</p><h3 className="text-2xl font-black text-emerald-600">{formatIDR(stats.income)}</h3></div>
-                <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl no-print"><ArrowUpCircle size={24}/></div>
-              </div>
-              <div className="p-8 bg-white rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between card">
-                <div><p className="text-xs font-black text-slate-400 uppercase mb-2">Pengeluaran</p><h3 className="text-2xl font-black text-rose-600">{formatIDR(stats.expense)}</h3></div>
-                <div className="p-4 bg-rose-50 text-rose-600 rounded-2xl no-print"><ArrowDownCircle size={24}/></div>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
-              <div className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-100 card">
-                <h3 className="font-black text-xl mb-8 flex items-center gap-3">Tren Kas (6 Bln)</h3>
-                <BarChart data={reportData.barData} />
-              </div>
-              <div className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-100 card">
-                <h3 className="font-black text-xl mb-8">Transaksi Terakhir</h3>
-                <div className="space-y-1">
-                  {transactions.slice(0, 8).map(t => <TransactionItem key={t.id} item={t} />)}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+            const [newCatName, setNewCatName] = useState('');
+            const [newCatType, setNewCatType] = useState('expense');
 
-        {activeTab === 'settings' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            <div className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-100">
-              <h3 className="text-xl font-black mb-6">Kelola Kategori</h3>
-              <form onSubmit={handleAddCategory} className="flex gap-2 mb-8">
-                <input type="text" placeholder="Nama Kategori Baru" required value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="flex-1 p-4 bg-slate-50 rounded-xl border-none outline-none font-bold text-sm" />
-                <select value={newCatType} onChange={(e) => setNewCatType(e.target.value)} className="p-4 bg-slate-50 rounded-xl border-none outline-none font-bold text-sm">
-                  <option value="expense">Keluar</option>
-                  <option value="income">Masuk</option>
-                </select>
-                <button type="submit" className="p-4 bg-blue-600 text-white rounded-xl shadow-lg hover:bg-blue-700 transition-all"><Plus size={20}/></button>
-              </form>
-              <div className="space-y-3">
-                {categories.map(cat => (
-                  <div key={cat.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${cat.type === 'income' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
-                      <span className="font-black text-sm uppercase tracking-wide text-slate-700">{cat.name}</span>
+            // --- Window Resize Listener ---
+            useEffect(() => {
+                const handleResize = () => setIsMobile(window.innerWidth < 768);
+                window.addEventListener('resize', handleResize);
+                
+                // Load Local Data as fallback if cloud not connected
+                const savedTrans = localStorage.getItem('umkm_transactions');
+                const savedCats = localStorage.getItem('umkm_categories');
+                
+                if (savedTrans) setTransactions(JSON.parse(savedTrans));
+                if (savedCats) {
+                    setCategories(JSON.parse(savedCats));
+                } else {
+                    const defaults = [
+                        { id: '1', name: 'Penjualan', type: 'income' },
+                        { id: '2', name: 'Modal', type: 'income' },
+                        { id: '3', name: 'Belanja Stok', type: 'expense' },
+                        { id: '4', name: 'Gaji', type: 'expense' },
+                        { id: '5', name: 'Operasional', type: 'expense' },
+                        { id: '6', name: 'Lainnya', type: 'expense' }
+                    ];
+                    setCategories(defaults);
+                }
+
+                return () => window.removeEventListener('resize', handleResize);
+            }, []);
+
+            // Save to LocalStorage whenever data changes
+            useEffect(() => {
+                localStorage.setItem('umkm_transactions', JSON.stringify(transactions));
+                localStorage.setItem('umkm_categories', JSON.stringify(categories));
+            }, [transactions, categories]);
+
+            // Set default category
+            useEffect(() => {
+                const filtered = categories.filter(c => c.type === formData.type);
+                if (filtered.length > 0 && !formData.category) {
+                    setFormData(prev => ({ ...prev, category: filtered[0].name }));
+                }
+            }, [formData.type, categories, showAddModal]);
+
+            // --- Kalkulasi ---
+            const stats = useMemo(() => {
+                const income = transactions
+                    .filter(t => t.type === 'income')
+                    .reduce((acc, curr) => acc + Number(curr.amount), 0);
+                const expense = transactions
+                    .filter(t => t.type === 'expense')
+                    .reduce((acc, curr) => acc + Number(curr.amount), 0);
+                return { income, expense, balance: income - expense };
+            }, [transactions]);
+
+            const reportData = useMemo(() => {
+                const months = [];
+                for (let i = 5; i >= 0; i--) {
+                    const d = new Date();
+                    d.setMonth(d.getMonth() - i);
+                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    const label = d.toLocaleString('id-ID', { month: 'short' });
+                    months.push({ key, label, income: 0, expense: 0 });
+                }
+
+                transactions.forEach(t => {
+                    const monthKey = t.date.substring(0, 7);
+                    const found = months.find(m => m.key === monthKey);
+                    if (found) {
+                        if (t.type === 'income') found.income += Number(t.amount);
+                        else found.expense += Number(t.amount);
+                    }
+                });
+
+                const expenseCats = {};
+                transactions.filter(t => t.type === 'expense').forEach(t => {
+                    expenseCats[t.category] = (expenseCats[t.category] || 0) + Number(t.amount);
+                });
+                
+                const pieData = Object.entries(expenseCats).map(([name, value]) => ({ name, value }));
+                const totalExpense = pieData.reduce((acc, curr) => acc + curr.value, 0);
+
+                return { barData: months, pieData, totalExpense };
+            }, [transactions]);
+
+            const formatIDR = (amount) => {
+                return new Intl.NumberFormat('id-ID', {
+                    style: 'currency',
+                    currency: 'IDR',
+                    minimumFractionDigits: 0
+                }).format(amount);
+            };
+
+            // --- Handlers ---
+            const handleAddTransaction = (e) => {
+                e.preventDefault();
+                if (!formData.amount || !formData.note) return;
+                
+                const newTrans = {
+                    ...formData,
+                    id: Date.now().toString(),
+                    amount: Number(formData.amount)
+                };
+                
+                setTransactions([newTrans, ...transactions]);
+                setShowAddModal(false);
+                setFormData({
+                    amount: '',
+                    type: 'income',
+                    category: '',
+                    note: '',
+                    date: new Date().toISOString().split('T')[0]
+                });
+            };
+
+            const deleteTransaction = (id) => {
+                setTransactions(transactions.filter(t => t.id !== id));
+            };
+
+            const handleAddCategory = (e) => {
+                e.preventDefault();
+                if (!newCatName) return;
+                const newCat = { id: Date.now().toString(), name: newCatName, type: newCatType };
+                setCategories([...categories, newCat]);
+                setNewCatName('');
+            };
+
+            const deleteCategory = (id) => {
+                setCategories(categories.filter(c => c.id !== id));
+            };
+
+            // --- UI Elements ---
+            const Icon = ({ name, size = 20, className = "" }) => {
+                const LucideIcon = lucide[name.charAt(0).toUpperCase() + name.slice(1)];
+                return LucideIcon ? <LucideIcon size={size} className={className} /> : null;
+            };
+
+            const BarChart = ({ data }) => {
+                const maxVal = Math.max(...data.map(d => Math.max(d.income, d.expense)), 1000);
+                const height = 150;
+                const width = 400;
+                const barWidth = 12;
+                const gap = 45;
+
+                return (
+                    <svg viewBox={`0 0 ${width} ${height + 30}`} className="w-full h-auto">
+                        {data.map((d, i) => {
+                            const incH = (d.income / maxVal) * height;
+                            const expH = (d.expense / maxVal) * height;
+                            const x = i * (barWidth * 2 + gap) + 30;
+                            return (
+                                <g key={i}>
+                                    <rect x={x} y={height - incH} width={barWidth} height={incH} fill="#10b981" rx="3" />
+                                    <rect x={x + barWidth + 4} y={height - expH} width={barWidth} height={expH} fill="#ef4444" rx="3" />
+                                    <text x={x + barWidth} y={height + 20} textAnchor="middle" fontSize="10" fill="#94a3b8" fontWeight="bold">{d.label}</text>
+                                </g>
+                            );
+                        })}
+                        <line x1="0" y1={height} x2={width} y2={height} stroke="#f1f5f9" strokeWidth="2" />
+                    </svg>
+                );
+            };
+
+            const TransactionItem = ({ item }) => (
+                <div className="flex items-center justify-between p-4 bg-white hover:bg-slate-50 border-b border-slate-50 transition-all group">
+                    <div className="flex items-center gap-4">
+                        <div className={`p-3 rounded-2xl ${item.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                            {item.type === 'income' ? <lucide.ArrowUpCircle size={20} /> : <lucide.ArrowDownCircle size={20} />}
+                        </div>
+                        <div>
+                            <p className="font-bold text-slate-800 text-sm leading-tight">{item.note}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase">{item.date}</span>
+                                <span className="text-[10px] text-slate-200 font-bold">•</span>
+                                <span className="bg-slate-100 text-slate-500 text-[9px] px-2 py-0.5 rounded font-bold uppercase">{item.category}</span>
+                            </div>
+                        </div>
                     </div>
-                    <button onClick={() => deleteCategory(cat.id)} className="text-slate-300 hover:text-rose-500 transition-all"><Trash2 size={16}/></button>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="bg-emerald-600 p-10 rounded-[40px] text-white shadow-xl flex flex-col justify-center">
-              <Settings size={48} className="mb-6 opacity-30" />
-              <h3 className="text-3xl font-black mb-4">Kostumisasi Bisnis</h3>
-              <p className="text-emerald-100 font-medium leading-relaxed">Tambahkan kategori khusus untuk melacak pengeluaran unik bisnis Anda, seperti "Biaya Iklan", "Servis Mesin", atau "Bonus Tim". Data ini akan otomatis tersedia di menu pilihan transaksi.</p>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'reports' && (
-          <div className="space-y-10">
-            <div className="bg-white p-12 rounded-[48px] shadow-sm border border-slate-100 card text-center">
-              <h3 className="text-2xl font-black mb-10">Distribusi Pengeluaran</h3>
-              <SimplePieChart data={reportData.pieData} total={reportData.totalExpense} />
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'history' && (
-          <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 p-10 card">
-            <h3 className="font-black text-2xl mb-10">Arsip Transaksi</h3>
-            <div className="border border-slate-50 rounded-3xl overflow-hidden">
-              {transactions.map(t => <TransactionItem key={t.id} item={t} />)}
-            </div>
-          </div>
-        )}
-      </main>
-    </div>
-  );
-
-  const MobileLayout = () => (
-    <div className="min-h-screen bg-slate-50 pb-32 font-sans text-slate-900">
-      <header className="bg-blue-600 text-white px-6 pt-10 pb-24 rounded-b-[60px] shadow-2xl no-print">
-        <div className="flex justify-between items-center mb-8 relative z-10">
-          <div className="flex items-center gap-3">
-            <Wallet size={20}/>
-            <span className="text-xs font-black tracking-widest uppercase">CASHFLOW</span>
-          </div>
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black ${isSyncing ? 'bg-white/10 text-white' : 'bg-emerald-400 text-blue-900'}`}>
-            {isSyncing ? 'SINKRONISASI...' : 'CLOUD AKTIF'}
-          </div>
-        </div>
-        <div className="text-center">
-          <p className="text-blue-200 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Saldo Total</p>
-          <h2 className="text-4xl font-black tracking-tighter">{formatIDR(stats.balance)}</h2>
-        </div>
-      </header>
-
-      <main className="px-6 -mt-14 relative z-10">
-        {activeTab === 'dashboard' && (
-          <div className="space-y-8">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white p-5 rounded-[36px] shadow-xl border border-slate-50">
-                <span className="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest">Masuk</span>
-                <p className="font-black text-emerald-600">{formatIDR(stats.income)}</p>
-              </div>
-              <div className="bg-white p-5 rounded-[36px] shadow-xl border border-slate-50">
-                <span className="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest">Keluar</span>
-                <p className="font-black text-rose-600">{formatIDR(stats.expense)}</p>
-              </div>
-            </div>
-            <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100">
-              <h3 className="font-black text-sm text-slate-400 uppercase tracking-widest mb-6">Tren Kas</h3>
-              <BarChart data={reportData.barData} />
-            </div>
-            <div className="space-y-6">
-              <h3 className="font-black text-lg px-2">Transaksi Terkini</h3>
-              <div className="bg-white rounded-[40px] overflow-hidden shadow-md">
-                {transactions.slice(0, 10).map(t => <TransactionItem key={t.id} item={t} />)}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'settings' && (
-          <div className="space-y-6">
-            <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100">
-              <h3 className="font-black text-lg mb-6 text-center">Kelola Kategori</h3>
-              <form onSubmit={handleAddCategory} className="space-y-3 mb-8">
-                <input type="text" placeholder="Nama Kategori" required value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none font-bold text-sm" />
-                <div className="flex gap-2">
-                  <select value={newCatType} onChange={(e) => setNewCatType(e.target.value)} className="flex-1 p-4 bg-slate-50 rounded-2xl border-none outline-none font-bold text-sm">
-                    <option value="expense">Keluar</option>
-                    <option value="income">Masuk</option>
-                  </select>
-                  <button type="submit" className="px-8 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-100"><Plus size={24}/></button>
+                    <div className="flex items-center gap-4">
+                        <p className={`font-black text-sm ${item.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {item.type === 'income' ? '+' : '-'} {formatIDR(item.amount)}
+                        </p>
+                        <button onClick={() => deleteTransaction(item.id)} className="opacity-0 group-hover:opacity-100 p-2 text-slate-300 hover:text-rose-500 transition-all no-print">
+                            <lucide.Trash2 size={16} />
+                        </button>
+                    </div>
                 </div>
-              </form>
-              <div className="space-y-2">
-                {categories.map(cat => (
-                  <div key={cat.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                    <span className="font-black text-xs uppercase tracking-widest text-slate-600">{cat.name}</span>
-                    <button onClick={() => deleteCategory(cat.id)} className="text-slate-300"><Trash2 size={16}/></button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+            );
 
-        {activeTab === 'reports' && (
-          <div className="bg-white p-8 rounded-[48px] shadow-sm border border-slate-100">
-            <h3 className="font-black text-center mb-10">Kategori Pengeluaran</h3>
-            <SimplePieChart data={reportData.pieData} total={reportData.totalExpense} />
-            <button onClick={handlePrintPDF} className="w-full mt-10 py-5 bg-blue-600 text-white rounded-[32px] font-black shadow-xl flex items-center justify-center gap-3 no-print">
-              <Printer size={20}/> CETAK PDF
-            </button>
-          </div>
-        )}
+            // --- Desktop Layout ---
+            const DesktopView = () => (
+                <div className="flex min-h-screen">
+                    <aside className="w-72 bg-white border-r border-slate-200 p-8 flex flex-col gap-10 no-print">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100">
+                                <lucide.Wallet size={24} />
+                            </div>
+                            <h1 className="text-xl font-black text-slate-900 leading-none">CASHFLOW <span className="block text-[9px] text-blue-500 tracking-[0.3em] mt-1">UMKM PRO</span></h1>
+                        </div>
 
-        {activeTab === 'history' && (
-          <div className="bg-white rounded-[40px] overflow-hidden shadow-md">
-            {transactions.map(t => <TransactionItem key={t.id} item={t} />)}
-          </div>
-        )}
-      </main>
+                        <nav className="flex flex-col gap-2 flex-1">
+                            {[
+                                { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
+                                { id: 'reports', label: 'Laporan Detail', icon: 'BarChart3' },
+                                { id: 'history', label: 'Riwayat Kas', icon: 'History' },
+                                { id: 'settings', label: 'Pengaturan', icon: 'Settings' }
+                            ].map(tab => (
+                                <button 
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`flex items-center gap-4 px-5 py-4 rounded-2xl font-bold transition-all ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400 hover:bg-slate-50'}`}
+                                >
+                                    {React.createElement(lucide[tab.icon], { size: 20 })} {tab.label}
+                                </button>
+                            ))}
+                        </nav>
 
-      {/* Nav Mobile */}
-      <nav className="fixed bottom-6 left-6 right-6 bg-slate-900/95 backdrop-blur-xl rounded-[36px] flex justify-around items-center py-5 px-4 z-40 shadow-2xl no-print">
-        <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 ${activeTab === 'dashboard' ? 'text-blue-400' : 'text-slate-500'}`}>
-          <LayoutDashboard size={20} /><span className="text-[7px] font-black uppercase tracking-widest">Beranda</span>
-        </button>
-        <button onClick={() => setActiveTab('reports')} className={`flex flex-col items-center gap-1 ${activeTab === 'reports' ? 'text-blue-400' : 'text-slate-500'}`}>
-          <BarChart3 size={20} /><span className="text-[7px] font-black uppercase tracking-widest">Analisis</span>
-        </button>
-        <div className="relative -top-8">
-           <button onClick={() => setShowAddModal(true)} className="bg-blue-600 text-white w-16 h-16 rounded-[24px] flex items-center justify-center shadow-2xl active:scale-90 transition-transform"><PlusCircle size={28} /></button>
-        </div>
-        <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center gap-1 ${activeTab === 'history' ? 'text-blue-400' : 'text-slate-500'}`}>
-          <History size={20} /><span className="text-[7px] font-black uppercase tracking-widest">History</span>
-        </button>
-        <button onClick={() => setActiveTab('settings')} className={`flex flex-col items-center gap-1 ${activeTab === 'settings' ? 'text-blue-400' : 'text-slate-500'}`}>
-          <Settings size={20} /><span className="text-[7px] font-black uppercase tracking-widest">Atur</span>
-        </button>
-      </nav>
-    </div>
-  );
+                        <div className="mt-auto space-y-4">
+                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <p className="text-[10px] font-black text-slate-400 uppercase mb-2">SINKRONISASI</p>
+                                <div className="flex items-center gap-2 text-emerald-600 font-bold text-xs">
+                                    <lucide.Cloud size={14}/> ONLINE & AKTIF
+                                </div>
+                            </div>
+                            <button onClick={() => window.print()} className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-slate-900 text-white font-bold text-sm hover:bg-black transition-all">
+                                <lucide.Printer size={18} /> CETAK LAPORAN
+                            </button>
+                        </div>
+                    </aside>
 
-  const Modal = () => (
-    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-end md:items-center justify-center p-0 md:p-10 no-print">
-      <div className="bg-white w-full max-w-xl rounded-t-[50px] md:rounded-[48px] p-8 md:p-12 animate-in slide-in-from-bottom duration-300 shadow-2xl overflow-y-auto max-h-[90vh]">
-        <div className="flex justify-between items-center mb-10">
-          <h2 className="text-2xl font-black text-slate-900">Catat Kas</h2>
-          <button onClick={() => setShowAddModal(false)} className="p-4 bg-slate-100 rounded-2xl"><X size={24} /></button>
-        </div>
-        <form onSubmit={handleAddTransaction} className="space-y-8">
-          <div className="grid grid-cols-2 gap-4">
-            <button type="button" onClick={() => setFormData({...formData, type: 'income', category: ''})}
-              className={`py-5 rounded-2xl font-black border-2 transition-all ${formData.type === 'income' ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'border-slate-100 text-slate-400'}`}>MASUK</button>
-            <button type="button" onClick={() => setFormData({...formData, type: 'expense', category: ''})}
-              className={`py-5 rounded-2xl font-black border-2 transition-all ${formData.type === 'expense' ? 'bg-rose-50 border-rose-500 text-rose-700' : 'border-slate-100 text-slate-400'}`}>KELUAR</button>
-          </div>
-          <div>
-            <label className="block text-[10px] font-black text-slate-400 mb-3 uppercase tracking-[0.25em]">Nominal</label>
-            <input type="number" required autoFocus className="w-full text-4xl font-black p-8 bg-slate-50 rounded-[32px] outline-none border-2 border-transparent focus:border-blue-500 shadow-inner"
-              placeholder="0" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 mb-3 uppercase tracking-[0.25em]">Kategori</label>
-              <select className="w-full p-5 bg-slate-50 rounded-2xl border-none outline-none font-black text-slate-700"
-                value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})}>
-                {categories.filter(c => c.type === formData.type).map(cat => (
-                  <option key={cat.id} value={cat.name}>{cat.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 mb-3 uppercase tracking-[0.25em]">Tanggal</label>
-              <input type="date" className="w-full p-5 bg-slate-50 rounded-2xl border-none font-bold"
-                value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
-            </div>
-          </div>
-          <input type="text" required className="w-full p-6 bg-slate-50 rounded-2xl border-none outline-none font-bold"
-            placeholder="Catatan Transaksi" value={formData.note} onChange={(e) => setFormData({...formData, note: e.target.value})} />
-          <button type="submit" className="w-full bg-blue-600 text-white py-6 rounded-[32px] font-black text-xl shadow-2xl active:scale-95 transition-all">SIMPAN DATA</button>
-        </form>
-      </div>
-    </div>
-  );
+                    <main className="flex-1 p-12 overflow-y-auto max-h-screen">
+                        <header className="flex justify-between items-center mb-10 no-print">
+                            <h2 className="text-3xl font-black text-slate-900">
+                                {activeTab === 'dashboard' ? 'Analisis Keuangan' : 
+                                 activeTab === 'reports' ? 'Analisis Kategori' : 
+                                 activeTab === 'settings' ? 'Atur Bisnis' : 'Arsip Transaksi'}
+                            </h2>
+                            <button onClick={() => setShowAddModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-3 shadow-xl shadow-blue-200 transition-all active:scale-95">
+                                <lucide.PlusCircle size={22} /> TRANSAKSI BARU
+                            </button>
+                        </header>
 
-  return (
-    <>
-      {isMobile ? <MobileLayout /> : <DesktopLayout />}
-      {showAddModal && <Modal />}
-    </>
-  );
-};
+                        <div className="fade-in">
+                            {activeTab === 'dashboard' && (
+                                <div className="space-y-10">
+                                    <div className="grid grid-cols-3 gap-8">
+                                        <div className="p-8 bg-white rounded-[32px] border border-slate-100 shadow-sm card flex items-center justify-between">
+                                            <div><p className="text-xs font-black text-slate-400 uppercase mb-2">Saldo</p><h3 className="text-2xl font-black text-blue-600">{formatIDR(stats.balance)}</h3></div>
+                                            <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl no-print"><lucide.Wallet size={24}/></div>
+                                        </div>
+                                        <div className="p-8 bg-white rounded-[32px] border border-slate-100 shadow-sm card flex items-center justify-between">
+                                            <div><p className="text-xs font-black text-slate-400 uppercase mb-2">Masuk</p><h3 className="text-2xl font-black text-emerald-600">{formatIDR(stats.income)}</h3></div>
+                                            <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl no-print"><lucide.ArrowUpCircle size={24}/></div>
+                                        </div>
+                                        <div className="p-8 bg-white rounded-[32px] border border-slate-100 shadow-sm card flex items-center justify-between">
+                                            <div><p className="text-xs font-black text-slate-400 uppercase mb-2">Keluar</p><h3 className="text-2xl font-black text-rose-600">{formatIDR(stats.expense)}</h3></div>
+                                            <div className="p-4 bg-rose-50 text-rose-600 rounded-2xl no-print"><lucide.ArrowDownCircle size={24}/></div>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-10">
+                                        <div className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-100 card">
+                                            <h3 className="font-black text-xl mb-8">Tren 6 Bulan</h3>
+                                            <BarChart data={reportData.barData} />
+                                        </div>
+                                        <div className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-100 card">
+                                            <h3 className="font-black text-xl mb-8">Data Terbaru</h3>
+                                            <div className="space-y-1">
+                                                {transactions.slice(0, 5).map(t => <TransactionItem key={t.id} item={t} />)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
-export default App;
+                            {activeTab === 'settings' && (
+                                <div className="grid grid-cols-2 gap-10">
+                                    <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
+                                        <h3 className="text-xl font-black mb-6">Kelola Kategori</h3>
+                                        <form onSubmit={handleAddCategory} className="flex gap-2 mb-8">
+                                            <input type="text" placeholder="Kategori baru..." required value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="flex-1 p-4 bg-slate-50 rounded-xl outline-none font-bold text-sm" />
+                                            <select value={newCatType} onChange={(e) => setNewCatType(e.target.value)} className="p-4 bg-slate-50 rounded-xl outline-none font-bold text-sm">
+                                                <option value="expense">Keluar</option>
+                                                <option value="income">Masuk</option>
+                                            </select>
+                                            <button type="submit" className="p-4 bg-blue-600 text-white rounded-xl shadow-lg hover:bg-blue-700 transition-all"><lucide.Plus size={20}/></button>
+                                        </form>
+                                        <div className="space-y-2">
+                                            {categories.map(cat => (
+                                                <div key={cat.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                                                    <span className={`text-xs font-black uppercase tracking-widest ${cat.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>{cat.name}</span>
+                                                    <button onClick={() => deleteCategory(cat.id)} className="text-slate-300 hover:text-rose-500"><lucide.Trash2 size={16}/></button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="bg-indigo-600 p-10 rounded-[40px] text-white shadow-xl flex flex-col justify-center">
+                                        <lucide.Settings size={48} className="mb-6 opacity-30" />
+                                        <h3 className="text-3xl font-black mb-4">Kostumisasi Bisnis</h3>
+                                        <p className="text-indigo-100 leading-relaxed">Sesuaikan kategori untuk pelaporan yang lebih spesifik bagi bisnis UMKM Anda.</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'reports' && (
+                                <div className="bg-white p-12 rounded-[48px] shadow-sm border border-slate-100 card text-center">
+                                    <h3 className="text-2xl font-black mb-6">Analisis Pengeluaran</h3>
+                                    <p className="text-slate-400 mb-10 font-medium">Berdasarkan total transaksi seluruh kategori.</p>
+                                    <div className="max-w-md mx-auto space-y-4">
+                                        {reportData.pieData.map((slice, i) => (
+                                            <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                                                <span className="font-bold text-slate-700">{slice.name}</span>
+                                                <span className="font-black text-blue-600">{formatIDR(slice.value)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'history' && (
+                                <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 p-8 card">
+                                    <h3 className="font-black text-2xl mb-8">Arsip Transaksi</h3>
+                                    <div className="space-y-1">
+                                        {transactions.map(t => <TransactionItem key={t.id} item={t} />)}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </main>
+                </div>
+            );
+
+            // --- Mobile Layout ---
+            const MobileView = () => (
+                <div className="min-h-screen bg-slate-50 pb-32 no-print">
+                    <header className="bg-blue-600 text-white px-6 pt-10 pb-20 rounded-b-[48px] shadow-2xl relative overflow-hidden">
+                        <div className="flex justify-between items-center mb-6 relative z-10">
+                            <span className="text-[10px] font-black tracking-widest uppercase opacity-70">UMKM CASHFLOW</span>
+                            <div className="flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full text-[9px] font-black">
+                                <lucide.Cloud size={10} /> CLOUD SYNC
+                            </div>
+                        </div>
+                        <div className="text-center relative z-10">
+                            <p className="text-blue-200 text-[10px] font-black uppercase tracking-[0.3em] mb-1">Total Saldo Bisnis</p>
+                            <h2 className="text-4xl font-black tracking-tighter">{formatIDR(stats.balance)}</h2>
+                        </div>
+                    </header>
+
+                    <main className="px-6 -mt-10 relative z-10 fade-in">
+                        {activeTab === 'dashboard' && (
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-white p-5 rounded-[32px] shadow-xl border border-slate-50">
+                                        <span className="text-[9px] font-black text-slate-400 uppercase block mb-1">Masuk</span>
+                                        <p className="font-black text-emerald-600 text-sm truncate">{formatIDR(stats.income)}</p>
+                                    </div>
+                                    <div className="bg-white p-5 rounded-[32px] shadow-xl border border-slate-50">
+                                        <span className="text-[9px] font-black text-slate-400 uppercase block mb-1">Keluar</span>
+                                        <p className="font-black text-rose-600 text-sm truncate">{formatIDR(stats.expense)}</p>
+                                    </div>
+                                </div>
+                                <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100">
+                                    <BarChart data={reportData.barData} />
+                                </div>
+                                <div className="bg-white rounded-[40px] overflow-hidden shadow-sm">
+                                    {transactions.slice(0, 10).map(t => <TransactionItem key={t.id} item={t} />)}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {activeTab !== 'dashboard' && (
+                            <div className="bg-white rounded-[40px] p-6 shadow-sm min-h-[50vh]">
+                                <h3 className="text-lg font-black mb-6 border-b border-slate-50 pb-4">
+                                    {activeTab === 'reports' ? 'Analisis' : 
+                                     activeTab === 'settings' ? 'Kategori' : 'History'}
+                                </h3>
+                                {activeTab === 'history' && transactions.map(t => <TransactionItem key={t.id} item={t} />)}
+                                {activeTab === 'settings' && (
+                                    <div className="space-y-4">
+                                        <form onSubmit={handleAddCategory} className="space-y-2">
+                                            <input type="text" placeholder="Nama Kategori" required value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm" />
+                                            <div className="flex gap-2">
+                                                <select value={newCatType} onChange={(e) => setNewCatType(e.target.value)} className="flex-1 p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm">
+                                                    <option value="expense">Keluar</option><option value="income">Masuk</option>
+                                                </select>
+                                                <button type="submit" className="px-6 bg-blue-600 text-white rounded-2xl"><lucide.Plus size={20}/></button>
+                                            </div>
+                                        </form>
+                                        <div className="space-y-2 pt-4">
+                                            {categories.map(cat => (
+                                                <div key={cat.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                                    <span className="text-[10px] font-black uppercase text-slate-600">{cat.name}</span>
+                                                    <button onClick={() => deleteCategory(cat.id)} className="text-slate-300"><lucide.Trash2 size={14}/></button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                {activeTab === 'reports' && (
+                                    <div className="space-y-3">
+                                        {reportData.pieData.map((d, i) => (
+                                            <div key={i} className="flex justify-between p-4 bg-slate-50 rounded-2xl text-xs font-bold">
+                                                <span>{d.name}</span><span>{formatIDR(d.value)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </main>
+
+                    <nav className="fixed bottom-6 left-6 right-6 bg-slate-900/95 backdrop-blur-xl rounded-[32px] flex justify-around items-center py-5 px-4 z-40 shadow-2xl border border-white/10 no-print">
+                        <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 ${activeTab === 'dashboard' ? 'text-blue-400' : 'text-slate-500'}`}>
+                            <lucide.LayoutDashboard size={20} /><span className="text-[7px] font-black uppercase tracking-widest">Home</span>
+                        </button>
+                        <button onClick={() => setActiveTab('reports')} className={`flex flex-col items-center gap-1 ${activeTab === 'reports' ? 'text-blue-400' : 'text-slate-500'}`}>
+                            <lucide.BarChart3 size={20} /><span className="text-[7px] font-black uppercase tracking-widest">Report</span>
+                        </button>
+                        <div className="relative -top-10">
+                            <button onClick={() => setShowAddModal(true)} className="bg-blue-600 text-white w-16 h-16 rounded-[24px] flex items-center justify-center shadow-2xl border-4 border-slate-50 active:scale-90 transition-transform"><lucide.PlusCircle size={32} /></button>
+                        </div>
+                        <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center gap-1 ${activeTab === 'history' ? 'text-blue-400' : 'text-slate-500'}`}>
+                            <lucide.History size={20} /><span className="text-[7px] font-black uppercase tracking-widest">Arsip</span>
+                        </button>
+                        <button onClick={() => setActiveTab('settings')} className={`flex flex-col items-center gap-1 ${activeTab === 'settings' ? 'text-blue-400' : 'text-slate-500'}`}>
+                            <lucide.Settings size={20} /><span className="text-[7px] font-black uppercase tracking-widest">Atur</span>
+                        </button>
+                    </nav>
+                </div>
+            );
+
+            return (
+                <>
+                    {isMobile ? <MobileView /> : <DesktopView />}
+                    
+                    {showAddModal && (
+                        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-end md:items-center justify-center p-0 md:p-10 no-print">
+                            <div className="bg-white w-full max-w-xl rounded-t-[40px] md:rounded-[40px] p-8 md:p-10 animate-in slide-in-from-bottom duration-300 shadow-2xl overflow-y-auto max-h-[90vh]">
+                                <div className="flex justify-between items-center mb-10">
+                                    <h2 className="text-xl font-black text-slate-900">Catat Transaksi</h2>
+                                    <button onClick={() => setShowAddModal(false)} className="p-3 bg-slate-100 rounded-2xl"><lucide.X size={20} /></button>
+                                </div>
+                                <form onSubmit={handleAddTransaction} className="space-y-6">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button type="button" onClick={() => setFormData({...formData, type: 'income', category: ''})}
+                                            className={`py-4 rounded-2xl font-black text-xs border-2 transition-all ${formData.type === 'income' ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'border-slate-100 text-slate-400'}`}>MASUK</button>
+                                        <button type="button" onClick={() => setFormData({...formData, type: 'expense', category: ''})}
+                                            className={`py-4 rounded-2xl font-black text-xs border-2 transition-all ${formData.type === 'expense' ? 'bg-rose-50 border-rose-500 text-rose-700' : 'border-slate-100 text-slate-400'}`}>KELUAR</button>
+                                    </div>
+                                    <input type="number" required placeholder="0" className="w-full text-4xl font-black p-8 bg-slate-50 rounded-[32px] outline-none border-2 border-transparent focus:border-blue-500 transition-all text-center"
+                                        value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <select className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm"
+                                            value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})}>
+                                            {categories.filter(c => c.type === formData.type).map(cat => (
+                                                <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                            ))}
+                                        </select>
+                                        <input type="date" className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm"
+                                            value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
+                                    </div>
+                                    <input type="text" required placeholder="Catatan transaksi..." className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm"
+                                        value={formData.note} onChange={(e) => setFormData({...formData, note: e.target.value})} />
+                                    <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-[28px] font-black text-lg shadow-xl shadow-blue-100 active:scale-95 transition-all uppercase tracking-widest">SIMPAN KAS</button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
