@@ -8,7 +8,6 @@ body {
     -webkit-tap-highlight-color: transparent;
 }
 
-/* Animasi Transisi */
 .fade-in {
     animation: fadeIn 0.3s ease-in-out;
 }
@@ -18,7 +17,6 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* Navigasi Bawah Mobile */
 .bottom-nav {
     position: fixed;
     bottom: 20px;
@@ -42,12 +40,14 @@ body {
     align-items: center;
     color: #94a3b8;
     transition: 0.2s;
-    cursor: pointer;
     background: none;
     border: none;
+    cursor: pointer;
 }
 
-.nav-item.active { color: #3b82f6; }
+.nav-item.active {
+    color: #3b82f6;
+}
 
 .fab-button {
     background: #2563eb;
@@ -63,4 +63,6 @@ body {
     border: 4px solid #0f172a;
 }
 
-@media print { .no-print { display: none !important; } }
+@media print {
+    .no-print { display: none !important; }
+}
