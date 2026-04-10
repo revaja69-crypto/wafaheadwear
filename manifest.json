@@ -1,0 +1,16 @@
+{
+    "name": "Cashflow UMKM Pro",
+    "short_name": "Cashflow",
+    "description": "Aplikasi pencatatan keuangan UMKM dengan fitur analisis dan luring.",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#f8fafc",
+    "theme_color": "#2563eb",
+    "icons": [
+        {
+            "src": "https://cdn-icons-png.flaticon.com/512/2654/2654254.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
