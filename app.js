@@ -43,7 +43,6 @@ const App = () => {
         date: new Date().toISOString().split('T')[0] 
     });
 
-    // Sinkronisasi data awal
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener('resize', handleResize);
@@ -156,7 +155,6 @@ const App = () => {
 
     return (
         <div className="min-h-screen pb-32 md:pb-10">
-            {/* Desktop Header */}
             <header className="hidden md:flex justify-between items-center p-10 bg-white border-b border-slate-100 no-print">
                 <div className="flex items-center gap-4">
                     <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg"><Icon name="wallet" size={28} /></div>
@@ -174,7 +172,6 @@ const App = () => {
                 </div>
             </header>
 
-            {/* Desktop Navigation */}
             <nav className="hidden md:flex justify-center gap-2 p-4 bg-white border-b border-slate-100 sticky top-0 z-50 no-print">
                 {['dashboard', 'history', 'reports', 'settings'].map(tab => (
                     <button key={tab} onClick={() => setActiveTab(tab)} className={`px-8 py-3 rounded-xl font-bold transition-all capitalize ${activeTab === tab ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}>
@@ -183,7 +180,6 @@ const App = () => {
                 ))}
             </nav>
 
-            {/* Mobile Navigation */}
             <div className="md:hidden bottom-nav no-print">
                 <button onClick={() => setActiveTab('dashboard')} className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}><Icon name="home" size={24} /> <span className="text-[8px] font-black mt-1">HOME</span></button>
                 <button onClick={() => setActiveTab('history')} className={`nav-item ${activeTab === 'history' ? 'active' : ''}`}><Icon name="history" size={24} /> <span className="text-[8px] font-black mt-1">ARSIP</span></button>
@@ -192,7 +188,6 @@ const App = () => {
                 <button onClick={() => setActiveTab('settings')} className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}><Icon name="settings" size={24} /> <span className="text-[8px] font-black mt-1">ATUR</span></button>
             </div>
 
-            {/* Main Content */}
             <main className="max-w-6xl mx-auto p-6 md:p-10">
                 {activeTab === 'dashboard' && <DashboardView />}
                 
@@ -260,7 +255,6 @@ const App = () => {
                 )}
             </main>
 
-            {/* Modal Input Transaksi */}
             {showAddModal && (
                 <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[2000] flex items-end md:items-center justify-center p-0 md:p-10 no-print">
                     <div className="bg-white w-full max-w-xl rounded-t-[40px] md:rounded-[48px] p-8 md:p-12 animate-in slide-in-from-bottom duration-300 max-h-[95vh] overflow-y-auto shadow-2xl">
@@ -285,7 +279,6 @@ const App = () => {
                 </div>
             )}
 
-            {/* Modal Konfirmasi Hapus */}
             {showDeleteConfirm && (
                 <div className="fixed inset-0 bg-rose-900/90 backdrop-blur-md z-[3000] flex items-center justify-center p-6 no-print">
                     <div className="bg-white w-full max-w-sm rounded-[48px] p-12 text-center shadow-2xl animate-in zoom-in duration-300">
@@ -305,6 +298,3 @@ const App = () => {
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
-</script>
-</body>
-</html>
